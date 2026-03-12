@@ -1,10 +1,14 @@
 package com.example.chatinterface.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
 
@@ -15,6 +19,11 @@ public class LlmInteraction {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "conversation_id", nullable = false)
+    @JsonIgnore
+    private Conversation conversation;
 
     @Column(nullable = false, length = 2000)
     private String prompt;
@@ -27,13 +36,15 @@ public class LlmInteraction {
 
     public LlmInteraction() {}
 
-    public LlmInteraction(String prompt, String response) {
+    public LlmInteraction(Conversation conversation, String prompt, String response) {
+        this.conversation = conversation;
         this.prompt = prompt;
         this.response = response;
         this.createdAt = LocalDateTime.now();
     }
 
     public Long getId() { return id; }
+    public Conversation getConversation() { return conversation; }
     public String getPrompt() { return prompt; }
     public String getResponse() { return response; }
     public LocalDateTime getCreatedAt() { return createdAt; }
