@@ -1,7 +1,7 @@
 package com.example.chatinterface.controller;
 
-import com.example.chatinterface.model.Greeting;
-import com.example.chatinterface.service.GreetingService;
+import com.example.chatinterface.model.LlmInteraction;
+import com.example.chatinterface.service.LlmService;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -14,24 +14,23 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/greetings")
-public class GreetingController {
+@RequestMapping("/api/completions")
+public class CompletionController {
 
-    private final GreetingService greetingService;
+    private final LlmService llmService;
 
-    public GreetingController(GreetingService greetingService) {
-        this.greetingService = greetingService;
+    public CompletionController(LlmService llmService) {
+        this.llmService = llmService;
     }
 
     @GetMapping
-    public List<Greeting> getAllGreetings() {
-        return greetingService.getAllGreetings();
+    public List<LlmInteraction> getAll() {
+        return llmService.getAll();
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public Greeting createGreeting(@RequestBody Map<String, String> body) {
-        String message = body.get("message");
-        return greetingService.createGreeting(message);
+    public LlmInteraction complete(@RequestBody Map<String, String> body) {
+        return llmService.complete(body.get("prompt"));
     }
 }
