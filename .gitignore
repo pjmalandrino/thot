@@ -1,0 +1,39 @@
+# IDE
+.idea/
+.vscode/
+*.iml
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Spring Boot / Maven
+target/
+.gradle/
+build/
+*.jar
+*.war
+*.class
+.classpath
+.project
+.settings/
+bin/
+.m2/
+
+# Vue.js / Node
+node_modules/
+dist/
+npm-debug.log
+yarn-error.log
+.env.local
+.env.*.local
+
+# Environment variables
+.env
+.env.local
+
+# OS
+Thumbs.db
+
+# Docker
+docker-compose.override.yml
