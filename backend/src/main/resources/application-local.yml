@@ -1,0 +1,11 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/chatinterface
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: http://localhost:8080/realms/chat-app/protocol/openid-connect/certs
+
+ollama:
+  base-url: http://localhost:11434

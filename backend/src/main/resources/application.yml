@@ -22,3 +22,7 @@ spring:
 app:
   keycloak:
     issuer-uri: http://localhost:8080/realms/chat-app
+
+ollama:
+  base-url: http://host.docker.internal:11434
+  model: llama3.2:3b
