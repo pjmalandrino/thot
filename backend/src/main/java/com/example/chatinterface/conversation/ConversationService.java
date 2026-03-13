@@ -1,5 +1,7 @@
 package com.example.chatinterface.conversation;
 
+import com.example.chatinterface.document.DocumentRepository;
+import com.example.chatinterface.document.DocumentService;
 import com.example.chatinterface.llm.LlmGateway;
 import com.example.chatinterface.llm.LlmGatewayFactory;
 import com.example.chatinterface.llm.LlmModel;
@@ -60,12 +62,29 @@ public class ConversationService {
             %s
             """;
 
+    private static final String DOCUMENT_CONTEXT_TEMPLATE = """
+
+            ## Documents attaches
+            L'utilisateur a attache les documents suivants a cette conversation. \
+            Utilise leur contenu pour repondre a ses questions.
+
+            Regles :
+            - Base ta reponse sur le contenu des documents quand c'est pertinent.
+            - Si l'utilisateur pose une question sur un document specifique, concentre-toi sur celui-ci.
+            - Cite le nom du document quand tu fais reference a son contenu.
+            - Si les documents ne contiennent pas l'information demandee, dis-le clairement.
+
+            %s
+            """;
+
     // ── Dependencies ──────────────────────────────────────────────────────────
 
     private final ConversationRepository conversationRepository;
     private final LlmInteractionRepository interactionRepository;
     private final ThotspaceRepository thotspaceRepository;
     private final WebSearchService webSearchService;
+    private final DocumentService documentService;
+    private final DocumentRepository documentRepository;
     private final LlmGatewayFactory gatewayFactory;
     private final LlmModelRepository modelRepository;
 
@@ -74,6 +93,8 @@ public class ConversationService {
             LlmInteractionRepository interactionRepository,
             ThotspaceRepository thotspaceRepository,
             WebSearchService webSearchService,
+            DocumentService documentService,
+            DocumentRepository documentRepository,
             LlmGatewayFactory gatewayFactory,
             LlmModelRepository modelRepository
     ) {
@@ -81,6 +102,8 @@ public class ConversationService {
         this.interactionRepository = interactionRepository;
         this.thotspaceRepository = thotspaceRepository;
         this.webSearchService = webSearchService;
+        this.documentService = documentService;
+        this.documentRepository = documentRepository;
         this.gatewayFactory = gatewayFactory;
         this.modelRepository = modelRepository;
     }
@@ -118,7 +141,8 @@ public class ConversationService {
         Conversation conversation = conversationRepository.findById(conversationId)
                 .orElseThrow(() -> new RuntimeException("Conversation not found"));
 
-        String systemPromptText = buildSystemPrompt(conversation.getThotspace(), null);
+        String documentContext = documentService.buildDocumentContext(conversationId);
+        String systemPromptText = buildSystemPrompt(conversation.getThotspace(), documentContext, null);
 
         ChatMemory memory = buildMemory(conversationId);
         memory.add(SystemMessage.from(systemPromptText));
@@ -143,7 +167,8 @@ public class ConversationService {
         log.info("[WEB-SEARCH] Got {} sources", results.size());
 
         String sourcesBlock = webSearchService.buildContextPrompt(results);
-        String systemPromptText = buildSystemPrompt(conversation.getThotspace(), sourcesBlock);
+        String documentContext = documentService.buildDocumentContext(conversationId);
+        String systemPromptText = buildSystemPrompt(conversation.getThotspace(), documentContext, sourcesBlock);
 
         // 2. Build messages: system prompt + history + question
         ChatMemory memory = buildMemory(conversationId);
@@ -171,16 +196,20 @@ public class ConversationService {
 
     @Transactional
     public void deleteConversation(Long conversationId) {
+        documentRepository.deleteByConversationId(conversationId);
         interactionRepository.deleteByConversationId(conversationId);
         conversationRepository.deleteById(conversationId);
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
 
-    private String buildSystemPrompt(Thotspace space, String webSearchContext) {
+    private String buildSystemPrompt(Thotspace space, String documentContext, String webSearchContext) {
         StringBuilder sb = new StringBuilder(BASE_SYSTEM_PROMPT);
         if (space != null && space.getSystemPrompt() != null && !space.getSystemPrompt().isBlank()) {
             sb.append(String.format(SPACE_INSTRUCTIONS_TEMPLATE, space.getSystemPrompt()));
+        }
+        if (documentContext != null) {
+            sb.append(String.format(DOCUMENT_CONTEXT_TEMPLATE, documentContext));
         }
         if (webSearchContext != null) {
             sb.append(String.format(WEB_SEARCH_CONTEXT_TEMPLATE, webSearchContext));

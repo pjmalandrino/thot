@@ -13,6 +13,10 @@ spring:
     show-sql: false
   liquibase:
     change-log: classpath:db/changelog/db.changelog-master.yaml
+  servlet:
+    multipart:
+      max-file-size: 15MB
+      max-request-size: 15MB
   security:
     oauth2:
       resourceserver:
@@ -40,3 +44,9 @@ tavily:
   search-depth: basic
   max-extract-urls: 3
   max-content-length: 4000
+
+document-parser:
+  base-url: http://localhost:8000
+
+document:
+  max-content-length: 8000
