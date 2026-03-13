@@ -20,14 +20,34 @@
           v-for="conv in store.conversations"
           :key="conv.id"
           class="conv-item"
-          :class="{ active: store.selectedId === conv.id && route.name === 'chat' }"
+          :class="{ active: store.selectedId === conv.id && route.name === 'chat', editing: editingId === conv.id }"
           @click="handleSelect(conv.id)"
         >
           <div class="conv-info">
-            <span class="conv-title">{{ conv.title }}</span>
+            <template v-if="editingId === conv.id">
+              <input
+                v-focus
+                class="conv-title-input"
+                v-model="editingTitle"
+                @keydown.enter.prevent="confirmRename(conv.id)"
+                @keydown.escape.prevent="cancelRename"
+                @click.stop
+                maxlength="100"
+              />
+            </template>
+            <template v-else>
+              <span class="conv-title" @dblclick.stop="startRename(conv)">{{ conv.title }}</span>
+            </template>
             <span class="conv-date">{{ formatDateShort(conv.createdAt) }}</span>
           </div>
-          <button class="conv-delete" @click.stop="handleDelete(conv.id)" title="Supprimer">&times;</button>
+          <div class="conv-actions" v-if="editingId !== conv.id">
+            <button class="conv-rename" @click.stop="startRename(conv)" title="Renommer">✎</button>
+            <button class="conv-delete" @click.stop="handleDelete(conv.id)" title="Supprimer">&times;</button>
+          </div>
+          <div class="conv-actions conv-actions--editing" v-else>
+            <button class="conv-confirm" @click.stop="confirmRename(conv.id)" title="Valider">✓</button>
+            <button class="conv-cancel" @click.stop="cancelRename" title="Annuler">✕</button>
+          </div>
         </div>
       </div>
 
@@ -55,6 +75,7 @@
 </template>
 
 <script setup>
+import { ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { getUsername, logout } from '../../../shared/auth/keycloak.js'
 import { formatDateShort } from '../../../shared/utils/date.js'
@@ -65,6 +86,37 @@ const route = useRoute()
 const store = useConversationStore()
 const username = getUsername()
 
+// ── Directive v-focus : focus + select à chaque mount de l'input ──
+// Nécessaire car ref dans v-for retourne un tableau en Vue 3 (silent fail)
+const vFocus = {
+  mounted(el) {
+    el.focus()
+    el.select()
+  }
+}
+
+// ── Rename state ───────────────────────────────────────────────
+const editingId = ref(null)
+const editingTitle = ref('')
+
+function startRename(conv) {
+  editingId.value = conv.id
+  editingTitle.value = conv.title
+}
+
+async function confirmRename(id) {
+  if (editingId.value !== id) return
+  const title = editingTitle.value.trim()
+  editingId.value = null
+  if (title) await store.rename(id, title)
+}
+
+function cancelRename() {
+  editingId.value = null
+  editingTitle.value = ''
+}
+
+// ── Navigation ─────────────────────────────────────────────────
 function handleLogout() { logout() }
 
 async function handleCreate() {
@@ -73,6 +125,7 @@ async function handleCreate() {
 }
 
 function handleSelect(id) {
+  if (editingId.value) return  // ignore click while editing
   store.select(id)
   router.push('/')
 }
@@ -194,9 +247,45 @@ async function handleDelete(id) {
 .conv-item:first-child { border-top: 1px solid var(--dark-border); }
 
 .conv-item:hover { background: var(--dark-mid); }
-.conv-item:hover .conv-delete { opacity: 0.5; }
+.conv-item:hover .conv-actions { opacity: 1; }
+.conv-item.editing { background: var(--dark-mid); }
 
 .conv-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.2rem; }
+
+.conv-title-input {
+  width: 100%;
+  background: var(--dark-border);
+  border: 1px solid var(--accent);
+  color: var(--text-on-dark);
+  font-family: 'Inter', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 400;
+  padding: 0.15rem 0.4rem;
+  outline: none;
+  border-radius: 0;
+}
+
+.conv-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.1rem;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.conv-rename {
+  background: none;
+  border: none;
+  color: var(--text-on-dark-muted);
+  font-size: 0.85rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.2s ease;
+  padding: 0.2rem 0.35rem;
+}
+
+.conv-rename:hover { color: var(--accent); }
 
 .conv-delete {
   background: none;
@@ -205,13 +294,41 @@ async function handleDelete(id) {
   font-size: 1.1rem;
   line-height: 1;
   cursor: pointer;
-  opacity: 0;
   transition: all 0.2s ease;
   padding: 0.2rem 0.4rem;
-  flex-shrink: 0;
 }
 
-.conv-delete:hover { opacity: 1 !important; color: #E85D4A; }
+.conv-delete:hover { color: #E85D4A; }
+
+.conv-actions--editing {
+  opacity: 1 !important;
+}
+
+.conv-confirm {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.2s ease;
+  padding: 0.2rem 0.35rem;
+}
+
+.conv-confirm:hover { color: #FFF; }
+
+.conv-cancel {
+  background: none;
+  border: none;
+  color: var(--text-on-dark-muted);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.2s ease;
+  padding: 0.2rem 0.35rem;
+}
+
+.conv-cancel:hover { color: #E85D4A; }
 
 .conv-item.active {
   background: var(--dark-mid);

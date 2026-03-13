@@ -3,6 +3,7 @@ package com.example.chatinterface.conversation;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -47,6 +48,11 @@ public class ConversationController {
                 ? conversationService.completeWithWebSearch(id, request.getPrompt(), request.getModelId())
                 : conversationService.complete(id, request.getPrompt(), request.getModelId());
         return CompletionResponse.from(interaction);
+    }
+
+    @PatchMapping("/{id}")
+    public Conversation rename(@PathVariable Long id, @RequestBody java.util.Map<String, String> body) {
+        return conversationService.renameConversation(id, body.get("title"));
     }
 
     @DeleteMapping("/{id}")

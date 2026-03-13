@@ -41,5 +41,20 @@ export const useConversationStore = defineStore('conversation', () => {
     selectedId.value = id
   }
 
-  return { conversations, selectedId, load, create, remove, select }
+  async function rename(id, title) {
+    const idx = conversations.value.findIndex(c => c.id === id)
+    const previous = idx !== -1 ? conversations.value[idx].title : null
+    // Optimistic update : mise à jour immédiate sans attendre l'API
+    if (idx !== -1) conversations.value[idx] = { ...conversations.value[idx], title }
+    try {
+      const updated = await api.renameConversation(id, title)
+      if (idx !== -1) conversations.value[idx] = { ...conversations.value[idx], title: updated.title }
+    } catch (e) {
+      console.error('Failed to rename conversation', e)
+      // Revert en cas d'erreur API
+      if (idx !== -1 && previous !== null) conversations.value[idx] = { ...conversations.value[idx], title: previous }
+    }
+  }
+
+  return { conversations, selectedId, load, create, remove, select, rename }
 })

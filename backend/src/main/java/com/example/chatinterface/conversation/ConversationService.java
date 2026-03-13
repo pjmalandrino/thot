@@ -66,6 +66,14 @@ public class ConversationService {
         return conversationRepository.save(new Conversation("Nouvelle conversation"));
     }
 
+    public Conversation renameConversation(Long conversationId, String title) {
+        Conversation conversation = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new RuntimeException("Conversation not found"));
+        String trimmed = (title != null && !title.isBlank()) ? title.trim() : "Sans titre";
+        conversation.setTitle(trimmed.length() > 100 ? trimmed.substring(0, 100) : trimmed);
+        return conversationRepository.save(conversation);
+    }
+
     public List<LlmInteraction> getCompletions(Long conversationId) {
         return interactionRepository.findByConversationIdOrderByCreatedAtAsc(conversationId);
     }
