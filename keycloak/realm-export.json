@@ -1,6 +1,7 @@
 {
   "realm": "chat-app",
   "enabled": true,
+  "loginTheme": "thot",
   "sslRequired": "none",
   "registrationAllowed": false,
   "loginWithEmailAllowed": true,

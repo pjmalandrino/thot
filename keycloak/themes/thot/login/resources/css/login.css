@@ -1,0 +1,202 @@
+/* ══════════════════════════════════════
+   THOT — Login Page
+   ══════════════════════════════════════ */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --bg:         #F5F2ED;
+  --dark:       #141210;
+  --accent:     #D4A438;
+  --text:       #141210;
+  --text-mid:   #5C584E;
+  --text-light: #9C9688;
+  --border:     #D8D4CC;
+}
+
+body {
+  background: var(--bg);
+  font-family: 'Inter', -apple-system, sans-serif;
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Wrapper centré ── */
+.page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  padding: 2rem 1rem;
+}
+
+/* ── Brand ── */
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  margin-bottom: 2.5rem;
+}
+
+.brand-mark {
+  width: 64px;
+  height: 64px;
+  background: var(--dark);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.brand-logo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.brand-name {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.brand-title {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 2rem;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--text);
+  line-height: 1;
+}
+
+.brand-tagline {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.58rem;
+  font-weight: 400;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+/* ── Carte formulaire ── */
+.card {
+  background: #FFFFFF;
+  border: 1px solid var(--border);
+  width: 100%;
+  max-width: 400px;
+  padding: 2.5rem;
+}
+
+/* ── Sous-titre ── */
+.card-subtitle {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.6rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--text-light);
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+/* ── Alertes ── */
+.alert {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.72rem;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1.5rem;
+  border: 1px solid;
+}
+
+.alert-error,
+.alert-danger   { background: rgba(212,74,58,.05);  border-color: #D44A3A; color: #D44A3A; }
+.alert-success  { background: rgba(61,202,173,.05); border-color: #3DCAAD; color: #2A9E85; }
+.alert-warning,
+.alert-info     { background: rgba(212,164,56,.05); border-color: var(--accent); color: var(--text-mid); }
+
+/* ── Champs ── */
+.field {
+  margin-bottom: 1.25rem;
+}
+
+.field label {
+  display: block;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.6rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-mid);
+  margin-bottom: 0.5rem;
+}
+
+.field input {
+  display: block;
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: 'Inter', sans-serif;
+  font-size: 0.9rem;
+  padding: 0.65rem 0.85rem;
+  outline: none;
+  transition: border-color 0.2s ease;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.field input:focus {
+  border-color: var(--text);
+  background: #FFF;
+}
+
+/* Autofill Chrome */
+.field input:-webkit-autofill,
+.field input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 50px var(--bg) inset;
+  -webkit-text-fill-color: var(--text);
+  caret-color: var(--text);
+}
+
+/* Erreur champ */
+.field-error {
+  display: block;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.6rem;
+  color: #D44A3A;
+  margin-top: 0.35rem;
+}
+
+/* ── Bouton ── */
+button#kc-login {
+  display: block;
+  width: 100%;
+  margin-top: 1.75rem;
+  background: var(--dark);
+  border: none;
+  color: #FFF;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 0.85rem 1.5rem;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+button#kc-login:hover {
+  background: var(--accent);
+  color: var(--dark);
+}
