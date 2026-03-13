@@ -11,3 +11,5 @@ databaseChangeLog:
       file: db/changelog/changes/005-create-llm-providers.yaml
   - include:
       file: db/changelog/changes/006-create-llm-models.yaml
+  - include:
+      file: db/changelog/changes/007-fix-ollama-base-url.yaml

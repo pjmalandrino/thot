@@ -1,0 +1,13 @@
+databaseChangeLog:
+  - changeSet:
+      id: 007-fix-ollama-base-url-local
+      author: developer
+      comment: "Fix Ollama base_url: host.docker.internal only resolves inside Docker. Use localhost for local dev."
+      changes:
+        - update:
+            tableName: llm_providers
+            columns:
+              - column:
+                  name: base_url
+                  value: http://localhost:11434
+            where: "type = 'OLLAMA' AND base_url = 'http://host.docker.internal:11434'"

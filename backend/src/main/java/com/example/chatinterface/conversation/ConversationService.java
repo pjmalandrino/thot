@@ -130,7 +130,8 @@ public class ConversationService {
 
     // ── Private helpers ────────────────────────────────────────────────────────
 
-    private LlmGateway resolveGateway(Long modelId) {
+    @Transactional(readOnly = true)
+    protected LlmGateway resolveGateway(Long modelId) {
         LlmModel model = (modelId != null)
                 ? modelRepository.findById(modelId).orElseGet(this::defaultModel)
                 : defaultModel();
