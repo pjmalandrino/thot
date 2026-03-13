@@ -1,4 +1,4 @@
-package com.example.chatinterface.config;
+package com.example.chatinterface.security;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -46,8 +46,6 @@ public class SecurityConfig {
     @Bean
     public JwtDecoder jwtDecoder() {
         NimbusJwtDecoder jwtDecoder = NimbusJwtDecoder.withJwkSetUri(jwkSetUri).build();
-        // Validate the issuer against localhost (what the browser sees)
-        // while fetching keys from keycloak:8080 (Docker internal network)
         jwtDecoder.setJwtValidator(
             new DelegatingOAuth2TokenValidator<>(JwtValidators.createDefaultWithIssuer(issuerUri))
         );

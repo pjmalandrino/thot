@@ -5,7 +5,10 @@
         <span class="header-label">Session</span>
         <span class="header-id">#{{ conversationId }}</span>
       </div>
-      <span class="header-pill">llama3.2:3b</span>
+      <select v-model="selectedModelId" class="model-select" :disabled="sending">
+        <option v-for="m in models" :key="m.id" :value="m.id">{{ m.displayLabel }}</option>
+        <option v-if="models.length === 0" disabled value="">Chargement…</option>
+      </select>
     </div>
 
     <div class="messages" ref="messagesEl">
@@ -132,6 +135,8 @@ const textareaEl = ref(null)
 const inputFocused = ref(false)
 const webSearch = ref(false)
 const searchStatus = ref('')
+const models = ref([])
+const selectedModelId = ref(null)
 
 function renderMarkdown(text) {
   if (!text) return ''
@@ -160,6 +165,16 @@ async function apiFetch(url, options = {}) {
   })
   if (!response.ok) throw new Error(`API error: ${response.status}`)
   return response.json()
+}
+
+async function fetchModels() {
+  try {
+    const data = await apiFetch('/api/llm/models')
+    models.value = data
+    if (data.length > 0) selectedModelId.value = data[0].id
+  } catch (e) {
+    console.error('Failed to load models', e)
+  }
 }
 
 async function fetchInteractions() {
@@ -192,7 +207,8 @@ async function sendPrompt(e) {
   try {
     const body = {
       prompt: prompt.value.trim(),
-      webSearch: webSearch.value
+      webSearch: webSearch.value,
+      modelId: selectedModelId.value
     }
 
     if (webSearch.value) {
@@ -229,7 +245,10 @@ function formatDate(dateStr) {
   return new Date(dateStr).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })
 }
 
-onMounted(fetchInteractions)
+onMounted(() => {
+  fetchModels()
+  fetchInteractions()
+})
 </script>
 
 <style scoped>
@@ -272,7 +291,7 @@ onMounted(fetchInteractions)
   color: var(--text-light);
 }
 
-.header-pill {
+.model-select {
   font-family: 'IBM Plex Mono', monospace;
   font-size: 0.65rem;
   color: var(--text-mid);
@@ -280,6 +299,25 @@ onMounted(fetchInteractions)
   padding: 0.25rem 0.75rem;
   border-radius: 50px;
   letter-spacing: 0.02em;
+  background: transparent;
+  outline: none;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 1.5rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%239C9688'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.5rem center;
+  transition: border-color 0.2s ease;
+}
+
+.model-select:hover:not(:disabled) {
+  border-color: var(--text-mid);
+}
+
+.model-select:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 /* ══════════════════════════════════════

@@ -1,7 +1,4 @@
-package com.example.chatinterface.dto;
-
-import com.example.chatinterface.model.LlmInteraction;
-import com.example.chatinterface.model.SourceInfo;
+package com.example.chatinterface.conversation;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -14,9 +11,6 @@ public class CompletionResponse {
     private LocalDateTime createdAt;
     private List<SourceInfo> sources;
 
-    /**
-     * Factory unique : lit les sources directement depuis l'entité persistée.
-     */
     public static CompletionResponse from(LlmInteraction interaction) {
         CompletionResponse r = new CompletionResponse();
         r.id = interaction.getId();

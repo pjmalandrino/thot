@@ -1,4 +1,4 @@
-package com.example.chatinterface.model;
+package com.example.chatinterface.conversation;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;

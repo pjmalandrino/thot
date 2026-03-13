@@ -1,4 +1,4 @@
-package com.example.chatinterface.config;
+package com.example.chatinterface.websearch;
 
 import dev.langchain4j.web.search.tavily.TavilyWebSearchEngine;
 import org.springframework.beans.factory.annotation.Value;

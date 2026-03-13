@@ -7,8 +7,15 @@ spring:
         jwt:
           jwk-set-uri: http://localhost:8080/realms/chat-app/protocol/openid-connect/certs
 
+llm:
+  provider: mistral
+
 ollama:
   base-url: http://localhost:11434
+
+mistral:
+  api-key: 5Lg5SQ8kolwnjxmJvU3YxiQwex3fpQzc
+  model: mistral-small-latest
 
 tavily:
   api-key: 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

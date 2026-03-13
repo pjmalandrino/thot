@@ -1,6 +1,5 @@
-package com.example.chatinterface.service;
+package com.example.chatinterface.websearch;
 
-import com.example.chatinterface.dto.SearchResultContext;
 import dev.langchain4j.web.search.WebSearchOrganicResult;
 import dev.langchain4j.web.search.WebSearchRequest;
 import dev.langchain4j.web.search.WebSearchResults;
@@ -10,7 +9,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -44,9 +42,9 @@ public class WebSearchService {
         this.maxContentLength = maxContentLength;
     }
 
-    public List<SearchResultContext> searchAndExtract(String query) {
+    public List<SearchResult> searchAndExtract(String query) {
         // 1. Search
-        log.info("Web search for: {}", query);
+        log.info("[SEARCH] Web search for: {}", query);
         WebSearchRequest request = WebSearchRequest.builder()
                 .searchTerms(query)
                 .maxResults(maxResults)
@@ -56,7 +54,7 @@ public class WebSearchService {
         List<WebSearchOrganicResult> organicResults = searchResults.results();
 
         if (organicResults == null || organicResults.isEmpty()) {
-            log.warn("No search results for query: {}", query);
+            log.warn("[SEARCH] No results for query: {}", query);
             return List.of();
         }
 
@@ -65,24 +63,21 @@ public class WebSearchService {
             log.info("[SEARCH] Result #{}: {} | {}", i + 1, r.title(), r.url());
         }
 
-        // 2. Deduplicate URLs
-        List<WebSearchOrganicResult> uniqueResults = deduplicateByUrl(organicResults);
-
-        // 3. Select top N for extraction
-        List<WebSearchOrganicResult> selectedResults = uniqueResults.stream()
+        // 2. Deduplicate & select top N for extraction
+        List<WebSearchOrganicResult> selected = deduplicateByUrl(organicResults).stream()
                 .limit(maxExtractUrls)
                 .toList();
 
-        // 4. Extract full content
-        List<String> urls = selectedResults.stream()
+        // 3. Extract full content
+        List<String> urls = selected.stream()
                 .map(r -> r.url().toString())
                 .toList();
 
-        log.info("[EXTRACT] Extracting content from {} URLs: {}", urls.size(), urls);
+        log.info("[EXTRACT] Extracting content from {} URLs", urls.size());
         List<TavilyExtractClient.ExtractResult> extractResults = extractClient.extract(urls);
         log.info("[EXTRACT] Got {} successful extractions", extractResults.size());
 
-        // 5. Build enriched contexts
+        // 4. Build enriched results
         Map<String, TavilyExtractClient.ExtractResult> extractMap = extractResults.stream()
                 .collect(Collectors.toMap(
                         TavilyExtractClient.ExtractResult::getUrl,
@@ -90,50 +85,41 @@ public class WebSearchService {
                         (a, b) -> a
                 ));
 
-        Instant now = Instant.now();
-        List<SearchResultContext> contexts = new ArrayList<>();
-
-        for (int i = 0; i < selectedResults.size(); i++) {
-            WebSearchOrganicResult result = selectedResults.get(i);
+        List<SearchResult> results = new ArrayList<>();
+        for (WebSearchOrganicResult result : selected) {
             String url = result.url().toString();
             TavilyExtractClient.ExtractResult extract = extractMap.get(url);
 
             if (extract == null || extract.getRawContent() == null || extract.getRawContent().isBlank()) {
-                log.warn("No extracted content for URL: {}", url);
+                log.warn("[EXTRACT] No content for URL: {}", url);
                 continue;
             }
 
             String content = truncate(extract.getRawContent(), maxContentLength);
-
-            contexts.add(new SearchResultContext(
-                    "[" + (contexts.size() + 1) + "]",
+            results.add(new SearchResult(
+                    "[" + (results.size() + 1) + "]",
                     url,
                     result.title(),
-                    "tavily",
-                    now,
-                    query,
-                    i + 1,
-                    extractScore(result),
                     content
             ));
         }
 
-        log.info("Built {} enriched contexts from web search", contexts.size());
-        return contexts;
+        log.info("[SEARCH] Built {} enriched results", results.size());
+        return results;
     }
 
-    public String buildContextPrompt(List<SearchResultContext> contexts) {
-        if (contexts.isEmpty()) {
+    public String buildContextPrompt(List<SearchResult> results) {
+        if (results.isEmpty()) {
             return "Aucune source web pertinente n'a pu etre extraite. "
                     + "Indique clairement a l'utilisateur qu'aucune source fiable n'a ete trouvee.";
         }
 
         StringBuilder sb = new StringBuilder();
-        for (SearchResultContext ctx : contexts) {
-            sb.append(ctx.getCitationId()).append(" ")
-                    .append(ctx.getSourceTitle()).append(" — ")
-                    .append(ctx.getSourceUrl()).append("\n")
-                    .append(ctx.getExtractedText())
+        for (SearchResult r : results) {
+            sb.append(r.getCitationId()).append(" ")
+                    .append(r.getSourceTitle()).append(" — ")
+                    .append(r.getSourceUrl()).append("\n")
+                    .append(r.getExtractedText())
                     .append("\n\n");
         }
         return sb.toString();
@@ -149,19 +135,5 @@ public class WebSearchService {
     private String truncate(String text, int maxLength) {
         if (text.length() <= maxLength) return text;
         return text.substring(0, maxLength) + "\n[...contenu tronque]";
-    }
-
-    private Double extractScore(WebSearchOrganicResult result) {
-        Map<String, String> metadata = result.metadata();
-        if (metadata == null) return null;
-        String score = metadata.get("score");
-        if (score != null) {
-            try {
-                return Double.parseDouble(score);
-            } catch (NumberFormatException e) {
-                return null;
-            }
-        }
-        return null;
     }
 }
