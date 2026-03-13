@@ -2,6 +2,8 @@
   <div class="chat-layout">
     <div class="chat-header">
       <div class="header-left">
+        <span v-if="activeSpaceName" class="header-space">{{ activeSpaceName }}</span>
+        <span v-if="activeSpaceName" class="header-sep">/</span>
         <span class="header-label">Session</span>
         <span class="header-id">#{{ conversationId }}</span>
       </div>
@@ -144,10 +146,11 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { marked } from 'marked'
 import { formatDateTime } from '../../../shared/utils/date.js'
 import { useModelStore } from '../../llm-model/store.js'
+import { useThotspaceStore } from '../../thotspace/store.js'
 import { fetchCompletions, sendCompletion } from '../api.js'
 import { analyzeContext } from '../../context/api.js'
 import ModelSelect from '../../llm-model/ui/ModelSelect.vue'
@@ -157,6 +160,8 @@ marked.setOptions({ breaks: true, gfm: true })
 const props = defineProps({ conversationId: { type: Number, required: true } })
 
 const modelStore = useModelStore()
+const thotspaceStore = useThotspaceStore()
+const activeSpaceName = computed(() => thotspaceStore.activeSpace?.name)
 
 const interactions = ref([])
 const prompt = ref('')
@@ -335,6 +340,20 @@ onMounted(loadInteractions)
   display: flex;
   align-items: baseline;
   gap: 0.5rem;
+}
+
+.header-space {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--accent);
+}
+
+.header-sep {
+  font-size: 0.75rem;
+  color: var(--text-light);
+  margin: 0 0.15rem;
 }
 
 .header-label {

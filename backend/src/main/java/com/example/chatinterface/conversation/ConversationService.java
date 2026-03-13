@@ -4,6 +4,8 @@ import com.example.chatinterface.llm.LlmGateway;
 import com.example.chatinterface.llm.LlmGatewayFactory;
 import com.example.chatinterface.llm.LlmModel;
 import com.example.chatinterface.llm.LlmModelRepository;
+import com.example.chatinterface.thotspace.Thotspace;
+import com.example.chatinterface.thotspace.ThotspaceRepository;
 import com.example.chatinterface.websearch.SearchResult;
 import com.example.chatinterface.websearch.WebSearchService;
 import dev.langchain4j.data.message.AiMessage;
@@ -23,8 +25,28 @@ public class ConversationService {
 
     private static final Logger log = LoggerFactory.getLogger(ConversationService.class);
 
-    private static final String WEB_SEARCH_SYSTEM_PROMPT = """
-            Tu es un assistant de recherche. Reponds a la question de l'utilisateur en te basant \
+    // ── Prompt en couches ─────────────────────────────────────────────────────
+
+    private static final String BASE_SYSTEM_PROMPT = """
+            Tu es THOT, un assistant IA avance. Tu es precis, concis et utile.
+
+            Regles de comportement :
+            - Reponds dans la langue de l'utilisateur.
+            - Sois factuel et structure tes reponses avec du Markdown quand c'est pertinent.
+            - Si tu n'es pas sur d'une information, dis-le clairement plutot que d'inventer.
+            - Adapte le niveau de detail a la complexite de la question.
+            """;
+
+    private static final String SPACE_INSTRUCTIONS_TEMPLATE = """
+
+            ## Instructions specifiques de l'espace
+            %s
+            """;
+
+    private static final String WEB_SEARCH_CONTEXT_TEMPLATE = """
+
+            ## Mode recherche web
+            Tu es en mode recherche web. Reponds a la question de l'utilisateur en te basant \
             UNIQUEMENT sur les sources fournies ci-dessous.
 
             Regles strictes :
@@ -38,8 +60,11 @@ public class ConversationService {
             %s
             """;
 
+    // ── Dependencies ──────────────────────────────────────────────────────────
+
     private final ConversationRepository conversationRepository;
     private final LlmInteractionRepository interactionRepository;
+    private final ThotspaceRepository thotspaceRepository;
     private final WebSearchService webSearchService;
     private final LlmGatewayFactory gatewayFactory;
     private final LlmModelRepository modelRepository;
@@ -47,23 +72,32 @@ public class ConversationService {
     public ConversationService(
             ConversationRepository conversationRepository,
             LlmInteractionRepository interactionRepository,
+            ThotspaceRepository thotspaceRepository,
             WebSearchService webSearchService,
             LlmGatewayFactory gatewayFactory,
             LlmModelRepository modelRepository
     ) {
         this.conversationRepository = conversationRepository;
         this.interactionRepository = interactionRepository;
+        this.thotspaceRepository = thotspaceRepository;
         this.webSearchService = webSearchService;
         this.gatewayFactory = gatewayFactory;
         this.modelRepository = modelRepository;
     }
 
-    public List<Conversation> getConversations() {
+    // ── Conversations CRUD ────────────────────────────────────────────────────
+
+    public List<Conversation> getConversations(Long thotspaceId) {
+        if (thotspaceId != null) {
+            return conversationRepository.findByThotspaceIdOrderByCreatedAtDesc(thotspaceId);
+        }
         return conversationRepository.findAllByOrderByCreatedAtDesc();
     }
 
-    public Conversation createConversation() {
-        return conversationRepository.save(new Conversation("Nouvelle conversation"));
+    public Conversation createConversation(Long thotspaceId) {
+        Thotspace space = thotspaceRepository.findById(thotspaceId)
+                .orElseThrow(() -> new RuntimeException("Thotspace not found"));
+        return conversationRepository.save(new Conversation("Nouvelle conversation", space));
     }
 
     public Conversation renameConversation(Long conversationId, String title) {
@@ -74,6 +108,8 @@ public class ConversationService {
         return conversationRepository.save(conversation);
     }
 
+    // ── Completions ───────────────────────────────────────────────────────────
+
     public List<LlmInteraction> getCompletions(Long conversationId) {
         return interactionRepository.findByConversationIdOrderByCreatedAtAsc(conversationId);
     }
@@ -82,7 +118,10 @@ public class ConversationService {
         Conversation conversation = conversationRepository.findById(conversationId)
                 .orElseThrow(() -> new RuntimeException("Conversation not found"));
 
+        String systemPromptText = buildSystemPrompt(conversation.getThotspace(), null);
+
         ChatMemory memory = buildMemory(conversationId);
+        memory.add(SystemMessage.from(systemPromptText));
         memory.add(UserMessage.from(prompt));
 
         LlmGateway gateway = resolveGateway(modelId);
@@ -104,11 +143,11 @@ public class ConversationService {
         log.info("[WEB-SEARCH] Got {} sources", results.size());
 
         String sourcesBlock = webSearchService.buildContextPrompt(results);
-        String systemPrompt = String.format(WEB_SEARCH_SYSTEM_PROMPT, sourcesBlock);
+        String systemPromptText = buildSystemPrompt(conversation.getThotspace(), sourcesBlock);
 
-        // 2. Build messages: system prompt (pinned) + history + question
+        // 2. Build messages: system prompt + history + question
         ChatMemory memory = buildMemory(conversationId);
-        memory.add(SystemMessage.from(systemPrompt));
+        memory.add(SystemMessage.from(systemPromptText));
         memory.add(UserMessage.from(prompt));
 
         log.info("[WEB-SEARCH] Sending {} messages to LLM", memory.messages().size());
@@ -136,7 +175,18 @@ public class ConversationService {
         conversationRepository.deleteById(conversationId);
     }
 
-    // ── Private helpers ────────────────────────────────────────────────────────
+    // ── Private helpers ───────────────────────────────────────────────────────
+
+    private String buildSystemPrompt(Thotspace space, String webSearchContext) {
+        StringBuilder sb = new StringBuilder(BASE_SYSTEM_PROMPT);
+        if (space != null && space.getSystemPrompt() != null && !space.getSystemPrompt().isBlank()) {
+            sb.append(String.format(SPACE_INSTRUCTIONS_TEMPLATE, space.getSystemPrompt()));
+        }
+        if (webSearchContext != null) {
+            sb.append(String.format(WEB_SEARCH_CONTEXT_TEMPLATE, webSearchContext));
+        }
+        return sb.toString();
+    }
 
     @Transactional(readOnly = true)
     protected LlmGateway resolveGateway(Long modelId) {

@@ -8,6 +8,8 @@
       </div>
     </div>
 
+    <SpaceSelector />
+
     <nav class="sidebar-nav">
       <button class="new-conv-btn" @click="handleCreate">
         <span>+ Nouvelle session</span>
@@ -57,6 +59,14 @@
 
       <button
         class="nav-item"
+        :class="{ active: route.name === 'thotspaces' }"
+        @click="router.push('/thotspaces')"
+      >
+        Thotspaces
+      </button>
+
+      <button
+        class="nav-item"
         :class="{ active: route.name === 'admin' }"
         @click="router.push('/admin')"
       >
@@ -75,16 +85,27 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { getUsername, logout } from '../../../shared/auth/keycloak.js'
 import { formatDateShort } from '../../../shared/utils/date.js'
 import { useConversationStore } from '../store.js'
+import { useThotspaceStore } from '../../thotspace/store.js'
+import SpaceSelector from '../../thotspace/ui/SpaceSelector.vue'
 
 const router = useRouter()
 const route = useRoute()
 const store = useConversationStore()
+const thotspaceStore = useThotspaceStore()
 const username = getUsername()
+
+// ── Watch space changes → reload conversations ──
+watch(() => thotspaceStore.selectedSpaceId, (newId) => {
+  if (newId) {
+    store.load(newId)
+    store.select(null)
+  }
+})
 
 // ── Directive v-focus : focus + select à chaque mount de l'input ──
 // Nécessaire car ref dans v-for retourne un tableau en Vue 3 (silent fail)
@@ -120,7 +141,7 @@ function cancelRename() {
 function handleLogout() { logout() }
 
 async function handleCreate() {
-  await store.create()
+  await store.create(thotspaceStore.selectedSpaceId)
   router.push('/')
 }
 
@@ -383,6 +404,7 @@ async function handleDelete(id) {
   transition: all 0.2s ease;
 }
 
+.nav-item + .nav-item { border-top: none; }
 .nav-item:hover { color: var(--text-on-dark); background: var(--dark-mid); }
 .nav-item.active { color: var(--accent); }
 

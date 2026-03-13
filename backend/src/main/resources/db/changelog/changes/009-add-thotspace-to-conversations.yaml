@@ -1,0 +1,35 @@
+databaseChangeLog:
+  - changeSet:
+      id: 009-add-thotspace-to-conversations
+      author: developer
+      changes:
+        - addColumn:
+            tableName: conversations
+            columns:
+              - column:
+                  name: thotspace_id
+                  type: BIGINT
+                  constraints:
+                    nullable: true
+
+  - changeSet:
+      id: 009-backfill-thotspace-id
+      author: developer
+      changes:
+        - sql:
+            sql: UPDATE conversations SET thotspace_id = (SELECT id FROM thotspaces WHERE is_default = true) WHERE thotspace_id IS NULL
+
+  - changeSet:
+      id: 009-add-thotspace-not-null-and-fk
+      author: developer
+      changes:
+        - addNotNullConstraint:
+            tableName: conversations
+            columnName: thotspace_id
+            columnDataType: BIGINT
+        - addForeignKeyConstraint:
+            baseTableName: conversations
+            baseColumnNames: thotspace_id
+            referencedTableName: thotspaces
+            referencedColumnNames: id
+            constraintName: fk_conversation_thotspace
