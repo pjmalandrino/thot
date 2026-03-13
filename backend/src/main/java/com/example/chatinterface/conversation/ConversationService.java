@@ -117,9 +117,20 @@ public class ConversationService {
         return conversationRepository.findAllByOrderByCreatedAtDesc();
     }
 
+    @Transactional
     public Conversation createConversation(Long thotspaceId) {
-        Thotspace space = thotspaceRepository.findById(thotspaceId)
-                .orElseThrow(() -> new RuntimeException("Thotspace not found"));
+        Thotspace space;
+        if (thotspaceId != null) {
+            space = thotspaceRepository.findById(thotspaceId)
+                    .orElseThrow(() -> new RuntimeException("Thotspace not found: " + thotspaceId));
+        } else {
+            space = thotspaceRepository.findByIsDefaultTrue()
+                    .orElseGet(() -> {
+                        Thotspace defaultSpace = new Thotspace("Général");
+                        defaultSpace.setDefault(true);
+                        return thotspaceRepository.save(defaultSpace);
+                    });
+        }
         return conversationRepository.save(new Conversation("Nouvelle conversation", space));
     }
 

@@ -47,5 +47,6 @@ public class Thotspace {
     public String getSystemPrompt() { return systemPrompt; }
     public void setSystemPrompt(String systemPrompt) { this.systemPrompt = systemPrompt; }
     public boolean isDefault() { return isDefault; }
+    public void setDefault(boolean isDefault) { this.isDefault = isDefault; }
     public LocalDateTime getCreatedAt() { return createdAt; }
 }
