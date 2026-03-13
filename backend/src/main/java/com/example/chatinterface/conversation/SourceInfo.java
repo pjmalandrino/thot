@@ -1,4 +1,4 @@
-package com.example.chatinterface.model;
+package com.example.chatinterface.conversation;
 
 public class SourceInfo {
 

@@ -1,4 +1,4 @@
-package com.example.chatinterface.model;
+package com.example.chatinterface.conversation;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.Column;

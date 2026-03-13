@@ -1,4 +1,4 @@
-package com.example.chatinterface.service;
+package com.example.chatinterface.websearch;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -69,8 +69,6 @@ public class TavilyExtractClient {
             return List.of();
         }
     }
-
-    // ── Tavily Extract API response DTOs ──
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class ExtractResponse {

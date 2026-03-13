@@ -60,9 +60,7 @@
         :conversation-id="selectedId"
         :key="selectedId"
       />
-      <div v-else-if="activeView === 'config'" class="empty-view">
-        <p class="empty-sub">Module en cours de developpement.</p>
-      </div>
+      <AdminView v-else-if="activeView === 'config'" />
       <div v-else class="empty-view">
         <span class="empty-hero">THOT</span>
         <p class="empty-sub">Creez une session pour commencer</p>
@@ -75,6 +73,7 @@
 import { ref, onMounted } from 'vue'
 import { getUsername, getToken, refreshToken, logout } from './keycloak.js'
 import HelloWorld from './components/HelloWorld.vue'
+import AdminView from './components/AdminView.vue'
 
 const username = getUsername()
 const activeView = ref('chat')

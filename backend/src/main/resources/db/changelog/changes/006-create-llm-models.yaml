@@ -1,0 +1,129 @@
+databaseChangeLog:
+  - changeSet:
+      id: 006-create-llm-models
+      author: developer
+      changes:
+        - createTable:
+            tableName: llm_models
+            columns:
+              - column:
+                  name: id
+                  type: BIGSERIAL
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: provider_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_model_provider
+                    references: llm_providers(id)
+              - column:
+                  name: model_name
+                  type: VARCHAR(200)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: display_name
+                  type: VARCHAR(200)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: enabled
+                  type: BOOLEAN
+                  defaultValueBoolean: true
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+
+  - changeSet:
+      id: 006-seed-llm-providers
+      author: developer
+      changes:
+        - insert:
+            tableName: llm_providers
+            columns:
+              - column:
+                  name: name
+                  value: Ollama
+              - column:
+                  name: type
+                  value: OLLAMA
+              - column:
+                  name: base_url
+                  value: http://host.docker.internal:11434
+              - column:
+                  name: enabled
+                  valueBoolean: true
+        - insert:
+            tableName: llm_providers
+            columns:
+              - column:
+                  name: name
+                  value: Mistral
+              - column:
+                  name: type
+                  value: MISTRAL
+              - column:
+                  name: api_key
+                  value: 5Lg5SQ8kolwnjxmJvU3YxiQwex3fpQzc
+              - column:
+                  name: enabled
+                  valueBoolean: true
+
+  - changeSet:
+      id: 006-seed-llm-models
+      author: developer
+      changes:
+        - insert:
+            tableName: llm_models
+            columns:
+              - column:
+                  name: provider_id
+                  valueComputed: (SELECT id FROM llm_providers WHERE name = 'Ollama')
+              - column:
+                  name: model_name
+                  value: llama3.2:3b
+              - column:
+                  name: display_name
+                  value: llama3.2
+              - column:
+                  name: enabled
+                  valueBoolean: true
+        - insert:
+            tableName: llm_models
+            columns:
+              - column:
+                  name: provider_id
+                  valueComputed: (SELECT id FROM llm_providers WHERE name = 'Ollama')
+              - column:
+                  name: model_name
+                  value: gemma3
+              - column:
+                  name: display_name
+                  value: gemma3
+              - column:
+                  name: enabled
+                  valueBoolean: false
+        - insert:
+            tableName: llm_models
+            columns:
+              - column:
+                  name: provider_id
+                  valueComputed: (SELECT id FROM llm_providers WHERE name = 'Mistral')
+              - column:
+                  name: model_name
+                  value: mistral-small-latest
+              - column:
+                  name: display_name
+                  value: mistral-small
+              - column:
+                  name: enabled
+                  valueBoolean: true
