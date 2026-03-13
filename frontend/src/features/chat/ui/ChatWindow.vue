@@ -94,6 +94,24 @@
     </div>
 
     <div class="input-area">
+      <!-- Document chips -->
+      <div v-if="documentStore.documents.length" class="doc-chips-bar">
+        <div v-for="doc in documentStore.documents" :key="doc.id" class="doc-chip">
+          <svg class="doc-chip-icon" viewBox="0 0 14 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M8.5 1H3a1.5 1.5 0 00-1.5 1.5v11A1.5 1.5 0 003 15h8a1.5 1.5 0 001.5-1.5V5L8.5 1z"/>
+            <path d="M8.5 1v4H12.5"/>
+          </svg>
+          <span class="doc-chip-name">{{ doc.filename }}</span>
+          <span class="doc-chip-meta">{{ formatCharCount(doc.charCount) }}</span>
+          <button
+            class="doc-chip-remove"
+            @click="documentStore.remove(conversationId, doc.id)"
+            :disabled="sending"
+            title="Retirer"
+          >&times;</button>
+        </div>
+      </div>
+
       <div class="input-box" :class="{ focused: inputFocused, generating: sending }">
         <textarea
           ref="textareaEl"
@@ -115,25 +133,27 @@
           </div>
           <div class="input-actions">
             <button
-              class="web-toggle"
+              class="action-toggle"
               :class="{ active: contextEngineering }"
               @click="contextEngineering = !contextEngineering"
               type="button"
               title="Analyse contextuelle"
             >
-              <span class="web-icon">&#9881;</span>
               Contexte
             </button>
             <button
-              class="web-toggle"
+              class="action-toggle"
               :class="{ active: webSearch }"
               @click="webSearch = !webSearch"
               type="button"
               title="Recherche web"
             >
-              <span class="web-icon">&#9906;</span>
               Web
             </button>
+            <DocumentAttachment
+              :conversation-id="conversationId"
+              :disabled="sending"
+            />
             <button class="send-btn" :disabled="!prompt.trim() || sending" @click="sendPrompt">
               <span v-if="sending" class="send-loader"></span>
               <span v-else>Envoyer</span>
@@ -151,9 +171,11 @@ import { marked } from 'marked'
 import { formatDateTime } from '../../../shared/utils/date.js'
 import { useModelStore } from '../../llm-model/store.js'
 import { useThotspaceStore } from '../../thotspace/store.js'
+import { useDocumentStore } from '../../document/store.js'
 import { fetchCompletions, sendCompletion } from '../api.js'
 import { analyzeContext } from '../../context/api.js'
 import ModelSelect from '../../llm-model/ui/ModelSelect.vue'
+import DocumentAttachment from '../../document/ui/DocumentAttachment.vue'
 
 marked.setOptions({ breaks: true, gfm: true })
 
@@ -161,6 +183,7 @@ const props = defineProps({ conversationId: { type: Number, required: true } })
 
 const modelStore = useModelStore()
 const thotspaceStore = useThotspaceStore()
+const documentStore = useDocumentStore()
 const activeSpaceName = computed(() => thotspaceStore.activeSpace?.name)
 
 const interactions = ref([])
@@ -190,6 +213,11 @@ function formatUrl(url) {
   } catch {
     return url
   }
+}
+
+function formatCharCount(charCount) {
+  if (charCount < 1000) return charCount + ' car.'
+  return Math.round(charCount / 1000) + 'k car.'
 }
 
 async function loadInteractions() {
@@ -313,7 +341,10 @@ function scrollToBottom() {
   if (messagesEl.value) messagesEl.value.scrollTop = messagesEl.value.scrollHeight
 }
 
-onMounted(loadInteractions)
+onMounted(() => {
+  loadInteractions()
+  documentStore.load(props.conversationId)
+})
 </script>
 
 <style scoped>
@@ -869,11 +900,8 @@ onMounted(loadInteractions)
   gap: 0.5rem;
 }
 
-/* ── Web Search Toggle ── */
-.web-toggle {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
+/* ── Action Toggles ── */
+.action-toggle {
   padding: 0.4rem 0.75rem;
   background: transparent;
   border: 1px solid var(--border);
@@ -886,18 +914,21 @@ onMounted(loadInteractions)
   transition: all 0.2s ease;
 }
 
-.web-toggle:hover {
+.action-toggle:hover {
   border-color: var(--text-mid);
   color: var(--text-mid);
 }
 
-.web-toggle.active {
+.action-toggle.active {
   border-color: var(--accent);
   color: var(--accent);
   background: rgba(212, 164, 56, 0.06);
 }
 
-.web-icon { font-size: 0.75rem; }
+.action-toggle:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
 
 .send-btn {
   padding: 0.5rem 1.5rem;
@@ -932,4 +963,63 @@ onMounted(loadInteractions)
   border-radius: 50%;
   animation: spin 0.6s linear infinite;
 }
+
+/* ══════════════════════════════════════
+   DOCUMENT CHIPS
+   ══════════════════════════════════════ */
+.doc-chips-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.5rem;
+  animation: fadeInUp 0.3s ease;
+}
+
+.doc-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.6rem;
+  background: #FFF;
+  border: 1px solid var(--border);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.62rem;
+  color: var(--text-mid);
+  transition: all 0.2s ease;
+}
+
+.doc-chip-icon {
+  width: 0.7rem;
+  height: 0.7rem;
+  flex-shrink: 0;
+  color: var(--text-light);
+}
+
+.doc-chip-name {
+  max-width: 160px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text);
+  font-weight: 500;
+}
+
+.doc-chip-meta {
+  color: var(--text-light);
+  font-size: 0.55rem;
+}
+
+.doc-chip-remove {
+  background: none;
+  border: none;
+  color: var(--text-light);
+  font-size: 0.85rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 0.15rem;
+  transition: color 0.2s ease;
+}
+
+.doc-chip-remove:hover { color: #E85D4A; }
+.doc-chip-remove:disabled { opacity: 0.3; cursor: not-allowed; }
 </style>

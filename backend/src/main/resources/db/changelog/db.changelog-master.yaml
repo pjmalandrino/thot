@@ -17,3 +17,5 @@ databaseChangeLog:
       file: db/changelog/changes/008-create-thotspaces-table.yaml
   - include:
       file: db/changelog/changes/009-add-thotspace-to-conversations.yaml
+  - include:
+      file: db/changelog/changes/010-create-documents-table.yaml

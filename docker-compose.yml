@@ -32,6 +32,12 @@ services:
       retries: 30
       start_period: 30s
 
+  document-parser:
+    build:
+      context: ./document-parser
+    ports:
+      - "8000:8000"
+
   backend:
     build:
       context: ./backend
@@ -43,6 +49,7 @@ services:
       SPRING_DATASOURCE_PASSWORD: app
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/chat-app/protocol/openid-connect/certs
       APP_KEYCLOAK_ISSUER_URI: http://localhost:8080/realms/chat-app
+      DOCUMENT_PARSER_BASE_URL: http://document-parser:8000
     depends_on:
       postgres:
         condition: service_healthy
