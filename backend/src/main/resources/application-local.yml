@@ -19,3 +19,8 @@ mistral:
 
 tavily:
   api-key: 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
+
+context:
+  primary-model: mistral-small-latest
+  min-confidence: 0.75
+  fallback-policy: continue
