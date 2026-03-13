@@ -64,11 +64,31 @@
         </div>
       </template>
 
-      <!-- Searching indicator -->
+      <!-- Searching / analyzing indicator -->
       <div v-if="searchStatus" class="search-status">
         <span class="search-dot"></span>
         <span>{{ searchStatus }}</span>
       </div>
+    </div>
+
+    <!-- Clarification card -->
+    <div v-if="clarification" class="clarification-card">
+      <div class="clarification-header">
+        <span class="clarification-icon">&#9888;</span>
+        <span class="clarification-title">Clarification suggérée</span>
+        <span v-if="clarification.confidence" class="clarification-confidence">{{ Math.round(clarification.confidence * 100) }}%</span>
+        <button class="clarification-dismiss" @click="dismissClarification" title="Fermer">&times;</button>
+      </div>
+      <p class="clarification-reason">{{ clarification.message }}</p>
+      <div v-if="clarification.suggestions && clarification.suggestions.length" class="clarification-suggestions">
+        <button
+          v-for="(s, i) in clarification.suggestions"
+          :key="i"
+          class="suggestion-btn"
+          @click="useSuggestion(s)"
+        >{{ s }}</button>
+      </div>
+      <button class="skip-btn" @click="skipClarification">Répondre quand même</button>
     </div>
 
     <div class="input-area">
@@ -92,6 +112,16 @@
             <kbd>&#8679;&#9166;</kbd> ligne
           </div>
           <div class="input-actions">
+            <button
+              class="web-toggle"
+              :class="{ active: contextEngineering }"
+              @click="contextEngineering = !contextEngineering"
+              type="button"
+              title="Analyse contextuelle"
+            >
+              <span class="web-icon">&#9881;</span>
+              Contexte
+            </button>
             <button
               class="web-toggle"
               :class="{ active: webSearch }"
@@ -119,6 +149,7 @@ import { marked } from 'marked'
 import { formatDateTime } from '../../../shared/utils/date.js'
 import { useModelStore } from '../../llm-model/store.js'
 import { fetchCompletions, sendCompletion } from '../api.js'
+import { analyzeContext } from '../../context/api.js'
 import ModelSelect from '../../llm-model/ui/ModelSelect.vue'
 
 marked.setOptions({ breaks: true, gfm: true })
@@ -136,6 +167,9 @@ const messagesEl = ref(null)
 const textareaEl = ref(null)
 const inputFocused = ref(false)
 const webSearch = ref(false)
+const contextEngineering = ref(false)
+const clarification = ref(null)
+const pendingPrompt = ref('')
 const searchStatus = ref('')
 
 function renderMarkdown(text) {
@@ -176,9 +210,47 @@ function autoResize() {
 async function sendPrompt(e) {
   if (e) e.preventDefault()
   if (!prompt.value.trim() || sending.value) return
+
+  const currentPrompt = prompt.value.trim()
+  clarification.value = null
+
+  // Step 1 : Analyse contextuelle (si activee)
+  if (contextEngineering.value) {
+    sending.value = true
+    error.value = ''
+    searchStatus.value = 'Analyse contextuelle...'
+    await nextTick()
+    scrollToBottom()
+
+    try {
+      const analysis = await analyzeContext(
+        currentPrompt,
+        ['vagueness']
+      )
+
+      if (analysis.status !== 'continue') {
+        // Interruption : afficher la carte de clarification
+        clarification.value = analysis
+        pendingPrompt.value = currentPrompt
+        searchStatus.value = ''
+        sending.value = false
+        return
+      }
+    } catch (err) {
+      // Fail-open cote frontend : si l'analyse echoue, on continue
+      console.warn('[CONTEXT] Analysis failed, continuing:', err.message)
+    }
+
+    searchStatus.value = ''
+  }
+
+  // Step 2 : Completion (inchange)
+  await doCompletion(currentPrompt)
+}
+
+async function doCompletion(text) {
   sending.value = true
   error.value = ''
-  searchStatus.value = webSearch.value ? 'Recherche web en cours...' : ''
 
   try {
     if (webSearch.value) {
@@ -188,7 +260,7 @@ async function sendPrompt(e) {
     }
 
     const result = await sendCompletion(props.conversationId, {
-      prompt: prompt.value.trim(),
+      prompt: text,
       webSearch: webSearch.value,
       modelId: modelStore.selectedModelId
     })
@@ -196,15 +268,40 @@ async function sendPrompt(e) {
     searchStatus.value = ''
     interactions.value.push(result)
     prompt.value = ''
+    pendingPrompt.value = ''
     if (textareaEl.value) textareaEl.value.style.height = 'auto'
     await nextTick()
     scrollToBottom()
-  } catch (e) {
-    error.value = e.message
+  } catch (err) {
+    error.value = err.message
     searchStatus.value = ''
   } finally {
     sending.value = false
   }
+}
+
+function useSuggestion(suggestion) {
+  const original = pendingPrompt.value
+  clarification.value = null
+  // Conserve la question d'origine + la precision choisie
+  prompt.value = original + '\n\nPrécision : ' + suggestion
+  pendingPrompt.value = ''
+  if (textareaEl.value) {
+    textareaEl.value.focus()
+    nextTick(autoResize)
+  }
+}
+
+function skipClarification() {
+  const text = pendingPrompt.value
+  clarification.value = null
+  pendingPrompt.value = ''
+  doCompletion(text)
+}
+
+function dismissClarification() {
+  clarification.value = null
+  pendingPrompt.value = ''
 }
 
 function scrollToBottom() {
@@ -573,6 +670,111 @@ onMounted(loadInteractions)
   border-top: 1px solid var(--border);
   margin: 1.5rem 0;
 }
+
+/* ══════════════════════════════════════
+   CLARIFICATION CARD
+   ══════════════════════════════════════ */
+.clarification-card {
+  flex-shrink: 0;
+  margin: 0 3rem;
+  padding: 1.25rem 1.5rem;
+  border: 1px solid var(--accent);
+  background: rgba(212, 164, 56, 0.04);
+  animation: fadeInUp 0.3s ease;
+}
+
+.clarification-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.clarification-icon {
+  font-size: 0.9rem;
+  color: var(--accent);
+}
+
+.clarification-title {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--accent);
+  flex: 1;
+}
+
+.clarification-confidence {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.55rem;
+  color: var(--text-light);
+  background: var(--border);
+  padding: 0.1rem 0.45rem;
+  border-radius: 50px;
+  margin-left: auto;
+}
+
+.clarification-dismiss {
+  background: none;
+  border: none;
+  color: var(--text-light);
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 0 0.25rem;
+  line-height: 1;
+  transition: color 0.2s ease;
+}
+
+.clarification-dismiss:hover { color: var(--text); }
+
+.clarification-reason {
+  font-size: 0.85rem;
+  color: var(--text-mid);
+  line-height: 1.6;
+  margin-bottom: 1rem;
+}
+
+.clarification-suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-bottom: 1rem;
+}
+
+.suggestion-btn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.65rem 1rem;
+  background: #FFF;
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: 'Inter', sans-serif;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.suggestion-btn:hover {
+  border-color: var(--accent);
+  background: rgba(212, 164, 56, 0.03);
+  color: var(--accent);
+}
+
+.skip-btn {
+  background: none;
+  border: none;
+  color: var(--text-light);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  padding: 0.35rem 0;
+  transition: color 0.2s ease;
+}
+
+.skip-btn:hover { color: var(--text); text-decoration: underline; }
 
 /* ══════════════════════════════════════
    INPUT

@@ -12,4 +12,6 @@ public interface LlmModelRepository extends JpaRepository<LlmModel, Long> {
     Optional<LlmModel> findFirstByEnabledTrue();
 
     List<LlmModel> findByProviderId(Long providerId);
+
+    Optional<LlmModel> findByModelName(String modelName);
 }
