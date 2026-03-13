@@ -6,17 +6,19 @@ export const useConversationStore = defineStore('conversation', () => {
   const conversations = ref([])
   const selectedId = ref(null)
 
-  async function load() {
+  async function load(thotspaceId) {
     try {
-      conversations.value = await api.fetchConversations()
+      conversations.value = thotspaceId
+        ? await api.fetchConversationsBySpace(thotspaceId)
+        : await api.fetchConversations()
     } catch (e) {
       console.error('Failed to load conversations', e)
     }
   }
 
-  async function create() {
+  async function create(thotspaceId) {
     try {
-      const conv = await api.createConversation()
+      const conv = await api.createConversation(thotspaceId)
       conversations.value.unshift(conv)
       selectedId.value = conv.id
       return conv
@@ -44,7 +46,7 @@ export const useConversationStore = defineStore('conversation', () => {
   async function rename(id, title) {
     const idx = conversations.value.findIndex(c => c.id === id)
     const previous = idx !== -1 ? conversations.value[idx].title : null
-    // Optimistic update : mise à jour immédiate sans attendre l'API
+    // Optimistic update : mise a jour immediate sans attendre l'API
     if (idx !== -1) conversations.value[idx] = { ...conversations.value[idx], title }
     try {
       const updated = await api.renameConversation(id, title)

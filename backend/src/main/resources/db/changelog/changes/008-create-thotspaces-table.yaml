@@ -1,0 +1,60 @@
+databaseChangeLog:
+  - changeSet:
+      id: 008-create-thotspaces-table
+      author: developer
+      changes:
+        - createTable:
+            tableName: thotspaces
+            columns:
+              - column:
+                  name: id
+                  type: BIGSERIAL
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: name
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: false
+                    unique: true
+              - column:
+                  name: description
+                  type: VARCHAR(500)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: system_prompt
+                  type: TEXT
+                  constraints:
+                    nullable: true
+              - column:
+                  name: is_default
+                  type: BOOLEAN
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+
+  - changeSet:
+      id: 008-seed-default-thotspace
+      author: developer
+      changes:
+        - insert:
+            tableName: thotspaces
+            columns:
+              - column:
+                  name: name
+                  value: General
+              - column:
+                  name: description
+                  value: Espace par defaut
+              - column:
+                  name: is_default
+                  valueBoolean: true

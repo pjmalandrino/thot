@@ -13,3 +13,7 @@ databaseChangeLog:
       file: db/changelog/changes/006-create-llm-models.yaml
   - include:
       file: db/changelog/changes/007-fix-ollama-base-url.yaml
+  - include:
+      file: db/changelog/changes/008-create-thotspaces-table.yaml
+  - include:
+      file: db/changelog/changes/009-add-thotspace-to-conversations.yaml

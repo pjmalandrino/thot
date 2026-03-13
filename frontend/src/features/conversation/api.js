@@ -4,8 +4,15 @@ export function fetchConversations() {
   return apiFetch('/api/conversations')
 }
 
-export function createConversation() {
-  return apiFetch('/api/conversations', { method: 'POST' })
+export function fetchConversationsBySpace(thotspaceId) {
+  return apiFetch(`/api/conversations?thotspaceId=${thotspaceId}`)
+}
+
+export function createConversation(thotspaceId) {
+  return apiFetch('/api/conversations', {
+    method: 'POST',
+    body: JSON.stringify({ thotspaceId })
+  })
 }
 
 export function renameConversation(id, title) {

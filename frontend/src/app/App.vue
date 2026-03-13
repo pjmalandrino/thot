@@ -12,12 +12,15 @@ import { onMounted } from 'vue'
 import { RouterView } from 'vue-router'
 import { ConversationSidebar, useConversationStore } from '../features/conversation/index.js'
 import { useModelStore } from '../features/llm-model/store.js'
+import { useThotspaceStore } from '../features/thotspace/store.js'
 
 const conversationStore = useConversationStore()
 const modelStore = useModelStore()
+const thotspaceStore = useThotspaceStore()
 
-onMounted(() => {
-  conversationStore.load()
+onMounted(async () => {
+  await thotspaceStore.load()
+  conversationStore.load(thotspaceStore.selectedSpaceId)
   modelStore.load()
 })
 </script>
