@@ -1,0 +1,13 @@
+databaseChangeLog:
+  - changeSet:
+      id: 004-add-sources-to-interactions
+      author: developer
+      changes:
+        - addColumn:
+            tableName: llm_interactions
+            columns:
+              - column:
+                  name: sources
+                  type: TEXT
+                  constraints:
+                    nullable: true

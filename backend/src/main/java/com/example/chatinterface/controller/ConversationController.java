@@ -1,5 +1,7 @@
 package com.example.chatinterface.controller;
 
+import com.example.chatinterface.dto.CompletionRequest;
+import com.example.chatinterface.dto.CompletionResponse;
 import com.example.chatinterface.model.Conversation;
 import com.example.chatinterface.model.LlmInteraction;
 import com.example.chatinterface.service.LlmService;
@@ -13,12 +15,16 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/conversations")
 public class ConversationController {
+
+    private static final Logger log = LoggerFactory.getLogger(ConversationController.class);
 
     private final LlmService llmService;
 
@@ -38,14 +44,24 @@ public class ConversationController {
     }
 
     @GetMapping("/{id}/completions")
-    public List<LlmInteraction> getCompletions(@PathVariable Long id) {
-        return llmService.getCompletions(id);
+    public List<CompletionResponse> getCompletions(@PathVariable Long id) {
+        return llmService.getCompletions(id).stream()
+                .map(CompletionResponse::from)
+                .toList();
     }
 
     @PostMapping("/{id}/completions")
     @ResponseStatus(HttpStatus.CREATED)
-    public LlmInteraction complete(@PathVariable Long id, @RequestBody Map<String, String> body) {
-        return llmService.complete(id, body.get("prompt"));
+    public CompletionResponse complete(@PathVariable Long id, @RequestBody CompletionRequest request) {
+        log.info("[CONTROLLER] POST /api/conversations/{}/completions | prompt='{}' | webSearch={}",
+                id, request.getPrompt(), request.isWebSearch());
+        LlmInteraction interaction;
+        if (request.isWebSearch()) {
+            interaction = llmService.completeWithWebSearch(id, request.getPrompt());
+        } else {
+            interaction = llmService.complete(id, request.getPrompt());
+        }
+        return CompletionResponse.from(interaction);
     }
 
     @DeleteMapping("/{id}")

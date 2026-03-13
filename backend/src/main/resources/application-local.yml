@@ -9,3 +9,6 @@ spring:
 
 ollama:
   base-url: http://localhost:11434
+
+tavily:
+  api-key: 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

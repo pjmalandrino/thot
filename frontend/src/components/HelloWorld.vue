@@ -29,15 +29,46 @@
             </div>
             <p class="msg-text user-text">{{ item.prompt }}</p>
           </div>
+
+          <!-- Sources panel (Perplexity-style) -->
+          <div v-if="item.sources && item.sources.length" class="sources-panel">
+            <div class="sources-header">
+              <span class="sources-icon">&#9906;</span>
+              <span class="sources-label">Sources</span>
+              <span class="sources-count">{{ item.sources.length }}</span>
+            </div>
+            <div class="sources-list">
+              <a
+                v-for="src in item.sources"
+                :key="src.citationId"
+                :href="src.sourceUrl"
+                target="_blank"
+                rel="noopener"
+                class="source-card"
+              >
+                <span class="source-citation">{{ src.citationId }}</span>
+                <span class="source-title">{{ src.sourceTitle || 'Sans titre' }}</span>
+                <span class="source-url">{{ formatUrl(src.sourceUrl) }}</span>
+              </a>
+            </div>
+          </div>
+
           <div class="msg msg-llm">
             <div class="msg-head">
               <span class="pill pill-llm">Thot</span>
+              <span v-if="item.sources" class="pill pill-web">Web</span>
               <span class="msg-meta">{{ formatDate(item.createdAt) }}</span>
             </div>
             <div class="msg-text llm-text md-content" v-html="renderMarkdown(item.response)"></div>
           </div>
         </div>
       </template>
+
+      <!-- Searching indicator -->
+      <div v-if="searchStatus" class="search-status">
+        <span class="search-dot"></span>
+        <span>{{ searchStatus }}</span>
+      </div>
     </div>
 
     <div class="input-area">
@@ -60,10 +91,22 @@
             <span class="dot">&middot;</span>
             <kbd>&#8679;&#9166;</kbd> ligne
           </div>
-          <button class="send-btn" :disabled="!prompt.trim() || sending" @click="sendPrompt">
-            <span v-if="sending" class="send-loader"></span>
-            <span v-else>Envoyer</span>
-          </button>
+          <div class="input-actions">
+            <button
+              class="web-toggle"
+              :class="{ active: webSearch }"
+              @click="webSearch = !webSearch"
+              type="button"
+              title="Recherche web"
+            >
+              <span class="web-icon">&#9906;</span>
+              Web
+            </button>
+            <button class="send-btn" :disabled="!prompt.trim() || sending" @click="sendPrompt">
+              <span v-if="sending" class="send-loader"></span>
+              <span v-else>Envoyer</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -87,10 +130,22 @@ const error = ref('')
 const messagesEl = ref(null)
 const textareaEl = ref(null)
 const inputFocused = ref(false)
+const webSearch = ref(false)
+const searchStatus = ref('')
 
 function renderMarkdown(text) {
   if (!text) return ''
   return marked.parse(text)
+}
+
+function formatUrl(url) {
+  if (!url) return ''
+  try {
+    const u = new URL(url)
+    return u.hostname.replace('www.', '')
+  } catch {
+    return url
+  }
 }
 
 async function apiFetch(url, options = {}) {
@@ -132,11 +187,26 @@ async function sendPrompt(e) {
   if (!prompt.value.trim() || sending.value) return
   sending.value = true
   error.value = ''
+  searchStatus.value = webSearch.value ? 'Recherche web en cours...' : ''
+
   try {
+    const body = {
+      prompt: prompt.value.trim(),
+      webSearch: webSearch.value
+    }
+
+    if (webSearch.value) {
+      searchStatus.value = 'Recherche web en cours...'
+      await nextTick()
+      scrollToBottom()
+    }
+
     const result = await apiFetch(`/api/conversations/${props.conversationId}/completions`, {
       method: 'POST',
-      body: JSON.stringify({ prompt: prompt.value.trim() })
+      body: JSON.stringify(body)
     })
+
+    searchStatus.value = ''
     interactions.value.push(result)
     prompt.value = ''
     if (textareaEl.value) textareaEl.value.style.height = 'auto'
@@ -144,6 +214,7 @@ async function sendPrompt(e) {
     scrollToBottom()
   } catch (e) {
     error.value = e.message
+    searchStatus.value = ''
   } finally {
     sending.value = false
   }
@@ -247,7 +318,6 @@ onMounted(fetchInteractions)
 
 .state-error { color: #D44A3A; }
 
-/* ── Empty ── */
 .empty-chat {
   display: flex;
   flex-direction: column;
@@ -270,19 +340,50 @@ onMounted(fetchInteractions)
 }
 
 /* ══════════════════════════════════════
+   SEARCH STATUS
+   ══════════════════════════════════════ */
+.search-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1rem 0;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.72rem;
+  color: var(--accent);
+  letter-spacing: 0.04em;
+  animation: fadeInUp 0.3s ease;
+}
+
+.search-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: pulse 1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.3; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ══════════════════════════════════════
    INTERACTION
    ══════════════════════════════════════ */
 .interaction {
   padding-bottom: 2.5rem;
   margin-bottom: 2.5rem;
   border-bottom: 1px solid var(--border);
+  animation: fadeInUp 0.4s ease;
 }
 
 .interaction:last-child { border-bottom: none; margin-bottom: 0; }
 
-.msg {
-  padding: 1.25rem 0;
-}
+.msg { padding: 1.25rem 0; }
 
 .msg-head {
   display: flex;
@@ -291,7 +392,6 @@ onMounted(fetchInteractions)
   margin-bottom: 1rem;
 }
 
-/* ── Pills ── */
 .pill {
   font-size: 0.6rem;
   font-weight: 600;
@@ -311,13 +411,20 @@ onMounted(fetchInteractions)
   color: var(--bg);
 }
 
+.pill-web {
+  background: none;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-size: 0.55rem;
+  padding: 0.2rem 0.6rem;
+}
+
 .msg-meta {
   font-family: 'IBM Plex Mono', monospace;
   font-size: 0.62rem;
   color: var(--text-light);
 }
 
-/* ── Text ── */
 .msg-text {
   font-size: 0.95rem;
   line-height: 1.8;
@@ -329,8 +436,95 @@ onMounted(fetchInteractions)
   color: var(--text-mid);
 }
 
-.llm-text {
+/* ══════════════════════════════════════
+   SOURCES PANEL (Perplexity-style)
+   ══════════════════════════════════════ */
+.sources-panel {
+  padding: 1.25rem 0 0.5rem;
+  animation: fadeInUp 0.3s ease;
+}
+
+.sources-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.sources-icon {
+  font-size: 0.85rem;
+  color: var(--accent);
+}
+
+.sources-label {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--text-mid);
+}
+
+.sources-count {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.55rem;
+  color: var(--text-light);
+  background: var(--border);
+  padding: 0.1rem 0.45rem;
+  border-radius: 50px;
+}
+
+.sources-list {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.source-card {
+  flex-shrink: 0;
+  width: 180px;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  background: #FFF;
+  text-decoration: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  transition: all 0.2s ease;
+}
+
+.source-card:hover {
+  border-color: var(--accent);
+  background: rgba(212, 164, 56, 0.03);
+}
+
+.source-citation {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.6rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.source-title {
+  font-size: 0.72rem;
+  font-weight: 500;
   color: var(--text);
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.source-url {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.55rem;
+  color: var(--text-light);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ══════════════════════════════════════
@@ -400,9 +594,7 @@ onMounted(fetchInteractions)
   transition: color 0.2s ease;
 }
 
-.md-content :deep(a:hover) {
-  color: var(--accent-light);
-}
+.md-content :deep(a:hover) { color: var(--accent-light); }
 
 .md-content :deep(hr) {
   border: none;
@@ -425,13 +617,8 @@ onMounted(fetchInteractions)
   background: #FFF;
 }
 
-.input-box.focused {
-  border-color: var(--text);
-}
-
-.input-box.generating {
-  border-color: var(--accent);
-}
+.input-box.focused { border-color: var(--text); }
+.input-box.generating { border-color: var(--accent); }
 
 .input-field {
   display: block;
@@ -482,6 +669,42 @@ onMounted(fetchInteractions)
 }
 
 .dot { margin: 0 0.15rem; opacity: 0.3; }
+
+.input-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* ── Web Search Toggle ── */
+.web-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.75rem;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-light);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.62rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.web-toggle:hover {
+  border-color: var(--text-mid);
+  color: var(--text-mid);
+}
+
+.web-toggle.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(212, 164, 56, 0.06);
+}
+
+.web-icon { font-size: 0.75rem; }
 
 .send-btn {
   padding: 0.5rem 1.5rem;
