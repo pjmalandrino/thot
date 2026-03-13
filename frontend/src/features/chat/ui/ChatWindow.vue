@@ -5,10 +5,7 @@
         <span class="header-label">Session</span>
         <span class="header-id">#{{ conversationId }}</span>
       </div>
-      <select v-model="selectedModelId" class="model-select" :disabled="sending">
-        <option v-for="m in models" :key="m.id" :value="m.id">{{ m.displayLabel }}</option>
-        <option v-if="models.length === 0" disabled value="">Chargement…</option>
-      </select>
+      <ModelSelect :disabled="sending" />
     </div>
 
     <div class="messages" ref="messagesEl">
@@ -60,7 +57,7 @@
             <div class="msg-head">
               <span class="pill pill-llm">Thot</span>
               <span v-if="item.sources" class="pill pill-web">Web</span>
-              <span class="msg-meta">{{ formatDate(item.createdAt) }}</span>
+              <span class="msg-meta">{{ formatDateTime(item.createdAt) }}</span>
             </div>
             <div class="msg-text llm-text md-content" v-html="renderMarkdown(item.response)"></div>
           </div>
@@ -118,12 +115,17 @@
 
 <script setup>
 import { ref, onMounted, nextTick } from 'vue'
-import { getToken, refreshToken } from '../keycloak.js'
 import { marked } from 'marked'
+import { formatDateTime } from '../../../shared/utils/date.js'
+import { useModelStore } from '../../llm-model/store.js'
+import { fetchCompletions, sendCompletion } from '../api.js'
+import ModelSelect from '../../llm-model/ui/ModelSelect.vue'
 
 marked.setOptions({ breaks: true, gfm: true })
 
 const props = defineProps({ conversationId: { type: Number, required: true } })
+
+const modelStore = useModelStore()
 
 const interactions = ref([])
 const prompt = ref('')
@@ -135,8 +137,6 @@ const textareaEl = ref(null)
 const inputFocused = ref(false)
 const webSearch = ref(false)
 const searchStatus = ref('')
-const models = ref([])
-const selectedModelId = ref(null)
 
 function renderMarkdown(text) {
   if (!text) return ''
@@ -153,34 +153,10 @@ function formatUrl(url) {
   }
 }
 
-async function apiFetch(url, options = {}) {
-  await refreshToken()
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${getToken()}`,
-      ...options.headers
-    }
-  })
-  if (!response.ok) throw new Error(`API error: ${response.status}`)
-  return response.json()
-}
-
-async function fetchModels() {
-  try {
-    const data = await apiFetch('/api/llm/models')
-    models.value = data
-    if (data.length > 0) selectedModelId.value = data[0].id
-  } catch (e) {
-    console.error('Failed to load models', e)
-  }
-}
-
-async function fetchInteractions() {
+async function loadInteractions() {
   try {
     error.value = ''
-    interactions.value = await apiFetch(`/api/conversations/${props.conversationId}/completions`)
+    interactions.value = await fetchCompletions(props.conversationId)
   } catch (e) {
     error.value = e.message
   } finally {
@@ -205,21 +181,16 @@ async function sendPrompt(e) {
   searchStatus.value = webSearch.value ? 'Recherche web en cours...' : ''
 
   try {
-    const body = {
-      prompt: prompt.value.trim(),
-      webSearch: webSearch.value,
-      modelId: selectedModelId.value
-    }
-
     if (webSearch.value) {
       searchStatus.value = 'Recherche web en cours...'
       await nextTick()
       scrollToBottom()
     }
 
-    const result = await apiFetch(`/api/conversations/${props.conversationId}/completions`, {
-      method: 'POST',
-      body: JSON.stringify(body)
+    const result = await sendCompletion(props.conversationId, {
+      prompt: prompt.value.trim(),
+      webSearch: webSearch.value,
+      modelId: modelStore.selectedModelId
     })
 
     searchStatus.value = ''
@@ -240,15 +211,7 @@ function scrollToBottom() {
   if (messagesEl.value) messagesEl.value.scrollTop = messagesEl.value.scrollHeight
 }
 
-function formatDate(dateStr) {
-  if (!dateStr) return ''
-  return new Date(dateStr).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })
-}
-
-onMounted(() => {
-  fetchModels()
-  fetchInteractions()
-})
+onMounted(loadInteractions)
 </script>
 
 <style scoped>
@@ -289,35 +252,6 @@ onMounted(() => {
   font-family: 'IBM Plex Mono', monospace;
   font-size: 0.72rem;
   color: var(--text-light);
-}
-
-.model-select {
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 0.65rem;
-  color: var(--text-mid);
-  border: 1px solid var(--border);
-  padding: 0.25rem 0.75rem;
-  border-radius: 50px;
-  letter-spacing: 0.02em;
-  background: transparent;
-  outline: none;
-  cursor: pointer;
-  appearance: none;
-  -webkit-appearance: none;
-  padding-right: 1.5rem;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%239C9688'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 0.5rem center;
-  transition: border-color 0.2s ease;
-}
-
-.model-select:hover:not(:disabled) {
-  border-color: var(--text-mid);
-}
-
-.model-select:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
 }
 
 /* ══════════════════════════════════════

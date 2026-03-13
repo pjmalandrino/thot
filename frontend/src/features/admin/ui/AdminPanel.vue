@@ -71,7 +71,7 @@
                 />
                 <span class="toggle-slider"></span>
               </label>
-              <button class="btn-delete" @click="deleteModel(model.id, provider.id)" title="Supprimer">&times;</button>
+              <button class="btn-delete" @click="handleDeleteModel(model.id, provider.id)" title="Supprimer">&times;</button>
             </div>
             <div v-if="getModels(provider.id).length === 0" class="models-empty">
               Aucun modèle configuré
@@ -83,7 +83,7 @@
             <div class="form-row">
               <input v-model="newModel.displayName" class="form-input" placeholder="Nom affiché (ex: llama3.3)" />
               <input v-model="newModel.modelName" class="form-input" placeholder="Nom technique (ex: llama3.3:8b)" />
-              <button class="btn-primary" @click="addModel(provider.id)">Ajouter</button>
+              <button class="btn-primary" @click="handleAddModel(provider.id)">Ajouter</button>
               <button class="btn-ghost" @click="addingModelForProvider = null">Annuler</button>
             </div>
           </div>
@@ -119,7 +119,7 @@
               placeholder="API key Mistral"
               type="password"
             />
-            <button class="btn-primary" @click="createProvider" :disabled="!newProvider.name || !newProvider.type">
+            <button class="btn-primary" @click="handleCreateProvider" :disabled="!newProvider.name || !newProvider.type">
               Créer
             </button>
           </div>
@@ -133,7 +133,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { getToken, refreshToken } from '../keycloak.js'
+import * as api from '../api.js'
 
 const providers = ref([])
 const models = ref([])
@@ -148,35 +148,19 @@ const newModel = ref({ displayName: '', modelName: '' })
 const showAddProvider = ref(false)
 const newProvider = ref({ name: '', type: '', baseUrl: '', apiKey: '' })
 
-async function apiFetch(url, options = {}) {
-  await refreshToken()
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${getToken()}`,
-      ...options.headers
-    }
-  })
-  if (!response.ok) throw new Error(`API error: ${response.status}`)
-  if (response.status === 204) return null
-  return response.json()
-}
-
 function getModels(providerId) {
   return models.value.filter(m => m._providerId === providerId)
 }
 
-// ModelResponse ne contient pas providerId directement — on le tague lors du chargement.
 async function loadData() {
   try {
     error.value = ''
-    const provList = await apiFetch('/api/admin/providers')
+    const provList = await api.fetchProviders()
     providers.value = provList
 
     const allModels = []
     for (const p of provList) {
-      const pModels = await apiFetch(`/api/admin/providers/${p.id}/models`)
+      const pModels = await api.fetchProviderModels(p.id)
       pModels.forEach(m => { m._providerId = p.id })
       allModels.push(...pModels)
     }
@@ -188,10 +172,7 @@ async function loadData() {
 
 async function toggleProvider(provider) {
   try {
-    const updated = await apiFetch(`/api/admin/providers/${provider.id}`, {
-      method: 'PUT',
-      body: JSON.stringify({ enabled: !provider.enabled })
-    })
+    const updated = await api.updateProvider(provider.id, { enabled: !provider.enabled })
     const idx = providers.value.findIndex(p => p.id === provider.id)
     if (idx !== -1) providers.value[idx] = updated
   } catch (e) {
@@ -209,10 +190,7 @@ async function saveProvider(provider) {
     const payload = {}
     if (provider.type === 'OLLAMA' && editForm.value.baseUrl) payload.baseUrl = editForm.value.baseUrl
     if (provider.type === 'MISTRAL' && editForm.value.apiKey) payload.apiKey = editForm.value.apiKey
-    const updated = await apiFetch(`/api/admin/providers/${provider.id}`, {
-      method: 'PUT',
-      body: JSON.stringify(payload)
-    })
+    const updated = await api.updateProvider(provider.id, payload)
     const idx = providers.value.findIndex(p => p.id === provider.id)
     if (idx !== -1) providers.value[idx] = updated
     editingProvider.value = null
@@ -223,10 +201,7 @@ async function saveProvider(provider) {
 
 async function toggleModel(model) {
   try {
-    const updated = await apiFetch(`/api/admin/models/${model.id}`, {
-      method: 'PUT',
-      body: JSON.stringify({ enabled: !model.enabled })
-    })
+    const updated = await api.updateModel(model.id, { enabled: !model.enabled })
     const idx = models.value.findIndex(m => m.id === model.id)
     if (idx !== -1) {
       updated._providerId = model._providerId
@@ -237,9 +212,9 @@ async function toggleModel(model) {
   }
 }
 
-async function deleteModel(modelId, providerId) {
+async function handleDeleteModel(modelId, providerId) {
   try {
-    await apiFetch(`/api/admin/models/${modelId}`, { method: 'DELETE' })
+    await api.deleteModel(modelId)
     models.value = models.value.filter(m => m.id !== modelId)
   } catch (e) {
     error.value = e.message
@@ -251,13 +226,10 @@ function startAddModel(providerId) {
   newModel.value = { displayName: '', modelName: '' }
 }
 
-async function addModel(providerId) {
+async function handleAddModel(providerId) {
   if (!newModel.value.displayName || !newModel.value.modelName) return
   try {
-    const created = await apiFetch(`/api/admin/providers/${providerId}/models`, {
-      method: 'POST',
-      body: JSON.stringify(newModel.value)
-    })
+    const created = await api.createModel(providerId, newModel.value)
     created._providerId = providerId
     models.value.push(created)
     addingModelForProvider.value = null
@@ -267,7 +239,7 @@ async function addModel(providerId) {
   }
 }
 
-async function createProvider() {
+async function handleCreateProvider() {
   if (!newProvider.value.name || !newProvider.value.type) return
   try {
     const payload = {
@@ -277,10 +249,7 @@ async function createProvider() {
       apiKey: newProvider.value.apiKey || null,
       enabled: true
     }
-    const created = await apiFetch('/api/admin/providers', {
-      method: 'POST',
-      body: JSON.stringify(payload)
-    })
+    const created = await api.createProvider(payload)
     providers.value.push(created)
     showAddProvider.value = false
     newProvider.value = { name: '', type: '', baseUrl: '', apiKey: '' }
