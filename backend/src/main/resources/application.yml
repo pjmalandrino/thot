@@ -26,3 +26,10 @@ app:
 ollama:
   base-url: http://host.docker.internal:11434
   model: llama3.2:3b
+
+tavily:
+  api-key: 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
+  max-results: 5
+  search-depth: basic
+  max-extract-urls: 3
+  max-content-length: 4000

@@ -5,3 +5,5 @@ databaseChangeLog:
       file: db/changelog/changes/002-create-llm-interactions-table.yaml
   - include:
       file: db/changelog/changes/003-create-conversations-table.yaml
+  - include:
+      file: db/changelog/changes/004-add-sources-to-interactions.yaml

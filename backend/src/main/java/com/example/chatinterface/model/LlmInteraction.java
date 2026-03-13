@@ -2,6 +2,7 @@ package com.example.chatinterface.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
@@ -10,7 +11,9 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Entity
 @Table(name = "llm_interactions")
@@ -34,6 +37,10 @@ public class LlmInteraction {
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
+    @Column(columnDefinition = "TEXT")
+    @Convert(converter = SourceInfoListConverter.class)
+    private List<SourceInfo> sources;
+
     public LlmInteraction() {}
 
     public LlmInteraction(Conversation conversation, String prompt, String response) {
@@ -43,9 +50,15 @@ public class LlmInteraction {
         this.createdAt = LocalDateTime.now();
     }
 
+    public LlmInteraction(Conversation conversation, String prompt, String response, List<SourceInfo> sources) {
+        this(conversation, prompt, response);
+        this.sources = sources;
+    }
+
     public Long getId() { return id; }
     public Conversation getConversation() { return conversation; }
     public String getPrompt() { return prompt; }
     public String getResponse() { return response; }
     public LocalDateTime getCreatedAt() { return createdAt; }
+    public List<SourceInfo> getSources() { return sources; }
 }
