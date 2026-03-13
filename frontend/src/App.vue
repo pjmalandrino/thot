@@ -5,31 +5,25 @@
         <img src="/thot-logo.png" alt="Thot" class="brand-logo" />
         <div class="brand-text">
           <span class="brand-name">THOT</span>
-          <span class="brand-ver">v0.1 &mdash; interface ia</span>
+          <span class="brand-ver">v0.1</span>
         </div>
       </div>
 
       <nav class="sidebar-nav">
         <button class="new-conv-btn" @click="createConversation">
-          <span class="btn-icon">+</span>
-          <span>Nouvelle session</span>
+          <span>+ Nouvelle session</span>
         </button>
 
-        <div class="section-label">
-          <span class="section-line"></span>
-          <span class="section-text">Historique</span>
-          <span class="section-line"></span>
-        </div>
+        <div class="section-label">Historique</div>
 
         <div class="conv-list">
           <div
-            v-for="(conv, idx) in conversations"
+            v-for="conv in conversations"
             :key="conv.id"
             class="conv-item"
             :class="{ active: selectedId === conv.id }"
             @click="selectConversation(conv.id)"
           >
-            <span class="conv-num">{{ String(conversations.length - idx).padStart(2, '0') }}</span>
             <div class="conv-info">
               <span class="conv-title">{{ conv.title }}</span>
               <span class="conv-date">{{ formatDate(conv.createdAt) }}</span>
@@ -40,19 +34,14 @@
 
         <div class="nav-spacer"></div>
 
-        <div class="section-label">
-          <span class="section-line"></span>
-          <span class="section-text">Systeme</span>
-          <span class="section-line"></span>
-        </div>
+        <div class="section-label">Systeme</div>
 
         <button
           class="nav-item"
           :class="{ active: activeView === 'config' }"
           @click="activeView = 'config'; selectedId = null"
         >
-          <span class="nav-icon">&gt;</span>
-          <span>Configuration</span>
+          Configuration
         </button>
       </nav>
 
@@ -61,7 +50,7 @@
           <span class="user-dot"></span>
           <span class="user-name">{{ username }}</span>
         </div>
-        <button class="logout-btn" @click="handleLogout">deconnexion</button>
+        <button class="logout-btn" @click="handleLogout">Deconnexion</button>
       </div>
     </aside>
 
@@ -72,17 +61,11 @@
         :key="selectedId"
       />
       <div v-else-if="activeView === 'config'" class="empty-view">
-        <div class="empty-block">
-          <span class="empty-tag">&gt; config</span>
-          <p class="empty-desc">Module en cours de developpement.</p>
-        </div>
+        <p class="empty-sub">Module en cours de developpement.</p>
       </div>
       <div v-else class="empty-view">
-        <div class="empty-block">
-          <span class="empty-tag">&gt; thot</span>
-          <p class="empty-desc">Creez une session pour commencer.</p>
-          <span class="empty-hint">Utilisez le bouton [+] dans la sidebar.</span>
-        </div>
+        <span class="empty-hero">THOT</span>
+        <p class="empty-sub">Creez une session pour commencer</p>
       </div>
     </main>
   </div>
@@ -160,33 +143,37 @@ onMounted(fetchConversations)
 </script>
 
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800&family=IBM+Plex+Mono:wght@300;400;500;600&display=swap');
+
 :root {
-  --bg-main: #FAF8F4;
-  --bg-sidebar: #F0EBE1;
-  --bg-card: #E8E1D5;
-  --bg-input: #FFFFFF;
-  --border: #D0C7B8;
-  --border-light: #E2DAD0;
+  --bg: #F5F2ED;
+  --bg-light: #FAFAF7;
+  --dark: #141210;
+  --dark-mid: #1E1C18;
+  --dark-light: #2A2824;
+  --dark-border: #333028;
 
-  --copper: #A07850;
-  --copper-light: #C09870;
-  --copper-dark: #705030;
-  --amb-gold: #B08828;
-  --cto-terra: #A04840;
-  --teal: #286858;
+  --accent: #D4A438;
+  --accent-light: #E8BE58;
+  --accent-pop: #3DCAAD;
 
-  --text-primary: #1A1410;
-  --text-secondary: #4A4038;
-  --text-muted: #908070;
+  --text: #141210;
+  --text-mid: #5C584E;
+  --text-light: #9C9688;
+  --text-on-dark: #D4D0C8;
+  --text-on-dark-muted: #7C7870;
+
+  --border: #D8D4CC;
+  --radius: 0;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
   font-family: 'Inter', -apple-system, sans-serif;
-  background: var(--bg-main);
-  color: var(--text-secondary);
-  line-height: 1.6;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
   height: 100vh;
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
@@ -194,27 +181,27 @@ body {
 
 .app-layout {
   display: grid;
-  grid-template-columns: 260px 1fr;
+  grid-template-columns: 300px 1fr;
   height: 100vh;
 }
 
-/* ═══════════════════════════════════════
+/* ══════════════════════════════════════════
    SIDEBAR
-   ═══════════════════════════════════════ */
+   ══════════════════════════════════════════ */
 
 .sidebar {
-  background: var(--bg-sidebar);
+  background: var(--dark);
   display: flex;
   flex-direction: column;
-  border-right: 1px solid var(--border);
+  border-right: 1px solid var(--dark-border);
 }
 
 .sidebar-brand {
-  padding: 1.25rem 1rem;
-  border-bottom: 1px solid var(--border);
+  padding: 1.5rem 1.5rem;
+  border-bottom: 1px solid var(--dark-border);
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 1rem;
 }
 
 .brand-logo {
@@ -222,149 +209,161 @@ body {
   height: 32px;
   object-fit: contain;
   border-radius: 4px;
-  filter: saturate(0.8);
 }
 
-.brand-text { display: flex; flex-direction: column; gap: 0.1rem; }
+.brand-text { display: flex; align-items: baseline; gap: 0.5rem; }
 
 .brand-name {
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--text-primary);
+  font-family: 'Inter', sans-serif;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #FFF;
   letter-spacing: 0.2em;
 }
 
 .brand-ver {
   font-family: 'IBM Plex Mono', monospace;
-  font-size: 0.5rem;
-  color: var(--text-muted);
-  letter-spacing: 0.06em;
+  font-size: 0.6rem;
+  color: var(--text-on-dark-muted);
 }
 
 /* ── Nav ── */
 .sidebar-nav {
   flex: 1;
-  padding: 0.75rem 0.6rem;
+  padding: 1rem;
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
+  gap: 0.15rem;
   overflow-y: auto;
   scrollbar-width: thin;
-  scrollbar-color: var(--border) transparent;
+  scrollbar-color: var(--dark-light) transparent;
 }
 
 .new-conv-btn {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  justify-content: center;
   width: 100%;
-  padding: 0.55rem 0.75rem;
-  background: var(--copper);
-  color: #FFF;
-  border: none;
-  border-radius: 4px;
+  padding: 0.75rem 1rem;
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 0;
   font-family: 'IBM Plex Mono', monospace;
-  font-size: 0.65rem;
+  font-size: 0.72rem;
   font-weight: 500;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   cursor: pointer;
-  transition: background 0.15s;
-  margin-bottom: 0.25rem;
+  transition: all 0.3s ease;
+  margin-bottom: 1rem;
 }
 
-.new-conv-btn:hover { background: var(--copper-light); }
-.btn-icon { font-weight: 700; font-size: 0.85rem; line-height: 1; }
+.new-conv-btn:hover {
+  background: var(--accent);
+  color: var(--dark);
+}
 
 /* ── Section Label ── */
 .section-label {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.6rem 0.25rem 0.35rem;
-}
-
-.section-line { flex: 1; height: 1px; background: var(--border); }
-
-.section-text {
   font-family: 'IBM Plex Mono', monospace;
-  font-size: 0.5rem;
+  font-size: 0.55rem;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.2em;
-  color: var(--text-muted);
-  white-space: nowrap;
+  color: var(--text-on-dark-muted);
+  padding: 1rem 0.5rem 0.5rem;
 }
 
-/* ── Conversation List ── */
+/* ── Conversations ── */
 .conv-list {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 0;
 }
 
 .conv-item {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: 0.75rem;
   width: 100%;
-  padding: 0.45rem 0.6rem;
+  padding: 0.75rem;
   background: none;
   border: none;
-  border-radius: 4px;
+  border-bottom: 1px solid var(--dark-border);
   cursor: pointer;
   text-align: left;
-  transition: background 0.12s;
+  transition: background 0.2s ease;
 }
 
-.conv-item:hover { background: var(--bg-card); }
+.conv-item:first-child { border-top: 1px solid var(--dark-border); }
+
+.conv-item:hover { background: var(--dark-mid); }
 .conv-item:hover .conv-delete { opacity: 0.5; }
 
-.conv-info { flex: 1; min-width: 0; }
+.conv-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.2rem; }
 
 .conv-delete {
   background: none;
   border: none;
-  color: var(--text-muted);
-  font-size: 0.9rem;
+  color: var(--text-on-dark-muted);
+  font-size: 1.1rem;
   line-height: 1;
   cursor: pointer;
   opacity: 0;
-  transition: opacity 0.12s, color 0.12s;
-  padding: 0.15rem 0.3rem;
-  border-radius: 3px;
+  transition: all 0.2s ease;
+  padding: 0.2rem 0.4rem;
   flex-shrink: 0;
 }
 
-.conv-delete:hover { opacity: 1 !important; color: var(--cto-terra); background: rgba(160, 72, 64, 0.08); }
+.conv-delete:hover { opacity: 1 !important; color: #E85D4A; }
 
 .conv-item.active {
-  background: var(--bg-main);
-  box-shadow: inset 2px 0 0 var(--copper);
+  background: var(--dark-mid);
 }
 
-.conv-num {
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 0.5rem;
-  color: var(--text-muted);
-  opacity: 0.5;
-  min-width: 1.2rem;
+.conv-item.active::before {
+  content: '';
+  display: block;
+  width: 3px;
+  height: 100%;
+  background: var(--accent);
+  position: absolute;
+  left: 0;
+}
+
+.conv-item {
+  position: relative;
+}
+
+.conv-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--accent);
 }
 
 .conv-title {
-  font-size: 0.72rem;
-  color: var(--text-secondary);
+  font-size: 0.82rem;
+  color: var(--text-on-dark);
   font-weight: 400;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  display: block;
+  transition: color 0.2s ease;
 }
 
-.conv-item.active .conv-title { color: var(--text-primary); font-weight: 500; }
+.conv-item.active .conv-title { color: #FFF; }
 
 .conv-date {
   font-family: 'IBM Plex Mono', monospace;
-  font-size: 0.48rem;
-  color: var(--text-muted);
+  font-size: 0.58rem;
+  color: var(--text-on-dark-muted);
+  letter-spacing: 0.02em;
 }
 
 .nav-spacer { flex: 1; }
@@ -373,29 +372,26 @@ body {
 .nav-item {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
   width: 100%;
-  padding: 0.5rem 0.6rem;
+  padding: 0.7rem 0.75rem;
   background: none;
   border: none;
-  border-radius: 4px;
-  color: var(--text-muted);
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 0.65rem;
-  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--dark-border);
+  border-top: 1px solid var(--dark-border);
+  color: var(--text-on-dark-muted);
+  font-size: 0.82rem;
   cursor: pointer;
   text-align: left;
-  transition: background 0.12s, color 0.12s;
+  transition: all 0.2s ease;
 }
 
-.nav-item:hover { background: var(--bg-card); color: var(--text-secondary); }
-.nav-item.active { background: var(--bg-main); color: var(--copper); box-shadow: inset 2px 0 0 var(--copper); }
-.nav-icon { font-weight: 600; font-size: 0.7rem; }
+.nav-item:hover { color: var(--text-on-dark); background: var(--dark-mid); }
+.nav-item.active { color: var(--accent); }
 
 /* ── Footer ── */
 .sidebar-footer {
-  padding: 0.8rem 1rem;
-  border-top: 1px solid var(--border);
+  padding: 1.25rem 1.5rem;
+  border-top: 1px solid var(--dark-border);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -404,45 +400,41 @@ body {
 .footer-user {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.5rem;
 }
 
 .user-dot {
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  background: var(--teal);
+  background: var(--accent-pop);
 }
 
 .user-name {
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 0.6rem;
-  color: var(--text-muted);
-  letter-spacing: 0.04em;
+  font-size: 0.75rem;
+  color: var(--text-on-dark-muted);
 }
 
 .logout-btn {
   background: none;
   border: none;
-  color: var(--text-muted);
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 0.55rem;
-  letter-spacing: 0.06em;
+  color: var(--text-on-dark-muted);
+  font-size: 0.7rem;
   cursor: pointer;
-  transition: color 0.15s;
-  opacity: 0.6;
+  transition: color 0.2s ease;
 }
 
-.logout-btn:hover { color: var(--cto-terra); opacity: 1; }
+.logout-btn:hover { color: #E85D4A; }
 
-/* ═══════════════════════════════════════
+/* ══════════════════════════════════════════
    MAIN
-   ═══════════════════════════════════════ */
+   ══════════════════════════════════════════ */
 
 .main {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  background: var(--bg);
 }
 
 .empty-view {
@@ -451,33 +443,21 @@ body {
   align-items: center;
   justify-content: center;
   height: 100%;
+  gap: 1.5rem;
 }
 
-.empty-block {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.6rem;
+.empty-hero {
+  font-size: 5rem;
+  font-weight: 200;
+  letter-spacing: 0.3em;
+  color: var(--text);
+  opacity: 0.06;
+  line-height: 1;
 }
 
-.empty-tag {
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 0.75rem;
-  color: var(--copper);
-  letter-spacing: 0.06em;
-}
-
-.empty-desc {
-  font-size: 0.82rem;
-  color: var(--text-muted);
-  font-weight: 300;
-}
-
-.empty-hint {
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 0.55rem;
-  color: var(--text-muted);
-  opacity: 0.5;
-  letter-spacing: 0.04em;
+.empty-sub {
+  font-size: 0.9rem;
+  color: var(--text-light);
+  font-weight: 400;
 }
 </style>
