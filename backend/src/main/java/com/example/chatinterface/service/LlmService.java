@@ -4,6 +4,10 @@ import com.example.chatinterface.model.Conversation;
 import com.example.chatinterface.model.LlmInteraction;
 import com.example.chatinterface.repository.ConversationRepository;
 import com.example.chatinterface.repository.LlmInteractionRepository;
+import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.memory.ChatMemory;
+import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.model.ollama.OllamaChatModel;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -48,7 +52,19 @@ public class LlmService {
         Conversation conversation = conversationRepository.findById(conversationId)
                 .orElseThrow(() -> new RuntimeException("Conversation not found"));
 
-        String response = chatModel.generate(prompt);
+        // Build windowed memory from DB history (keeps last 20 messages = ~10 exchanges)
+        ChatMemory memory = MessageWindowChatMemory.withMaxMessages(20);
+
+        List<LlmInteraction> history = interactionRepository
+                .findByConversationIdOrderByCreatedAtAsc(conversationId);
+
+        for (LlmInteraction prev : history) {
+            memory.add(UserMessage.from(prev.getPrompt()));
+            memory.add(AiMessage.from(prev.getResponse()));
+        }
+        memory.add(UserMessage.from(prompt));
+
+        String response = chatModel.generate(memory.messages()).content().text();
         LlmInteraction interaction = interactionRepository.save(
                 new LlmInteraction(conversation, prompt, response));
 

@@ -2,64 +2,50 @@
   <div class="chat-layout">
     <div class="chat-header">
       <div class="header-left">
-        <span class="header-line">&mdash;</span>
-        <span class="header-title">Session</span>
-        <span class="header-sep">/</span>
+        <span class="header-label">Session</span>
         <span class="header-id">#{{ conversationId }}</span>
       </div>
-      <span class="header-model">llama3.2:3b</span>
+      <span class="header-pill">llama3.2:3b</span>
     </div>
 
     <div class="messages" ref="messagesEl">
       <div v-if="loading" class="state-msg">
-        <span class="state-icon">...</span>
-        <span>chargement</span>
+        <span class="loader"></span>
+        <span>Chargement</span>
       </div>
       <div v-else-if="error" class="state-msg state-error">
-        <span class="state-icon">!</span>
         <span>{{ error }}</span>
       </div>
       <template v-else>
         <div v-if="interactions.length === 0" class="empty-chat">
-          <div class="empty-terminal">
-            <span class="term-line">$ thot --init</span>
-            <span class="term-line dim">En attente d'une instruction...</span>
-            <span class="term-cursor">_</span>
-          </div>
+          <span class="empty-hero">?</span>
+          <span class="empty-text">En attente d'une instruction</span>
         </div>
         <div v-for="(item, idx) in interactions" :key="item.id" class="interaction">
           <div class="msg msg-user">
-            <div class="msg-meta">
-              <span class="msg-tag">VOUS</span>
-              <span class="msg-idx">#{{ idx + 1 }}</span>
+            <div class="msg-head">
+              <span class="pill pill-user">Vous</span>
+              <span class="msg-meta">#{{ idx + 1 }}</span>
             </div>
-            <p class="msg-content">{{ item.prompt }}</p>
+            <p class="msg-text user-text">{{ item.prompt }}</p>
           </div>
           <div class="msg msg-llm">
-            <div class="msg-meta">
-              <span class="msg-tag llm-tag">THOT</span>
-              <span class="msg-time">{{ formatDate(item.createdAt) }}</span>
+            <div class="msg-head">
+              <span class="pill pill-llm">Thot</span>
+              <span class="msg-meta">{{ formatDate(item.createdAt) }}</span>
             </div>
-            <div class="msg-content md-content" v-html="renderMarkdown(item.response)"></div>
+            <div class="msg-text llm-text md-content" v-html="renderMarkdown(item.response)"></div>
           </div>
         </div>
       </template>
     </div>
 
     <div class="input-area">
-      <div class="input-console" :class="{ focused: inputFocused, disabled: sending }">
-        <div class="console-top">
-          <span class="console-prompt">&gt;_</span>
-          <div v-if="sending" class="console-status">
-            <span class="status-dot"></span>
-            <span class="status-text">traitement</span>
-          </div>
-          <span v-else class="console-label">instruction</span>
-        </div>
+      <div class="input-box" :class="{ focused: inputFocused, generating: sending }">
         <textarea
           ref="textareaEl"
           v-model="prompt"
-          class="console-input"
+          class="input-field"
           placeholder="Posez votre question..."
           :disabled="sending"
           rows="1"
@@ -68,14 +54,15 @@
           @focus="inputFocused = true"
           @blur="inputFocused = false"
         ></textarea>
-        <div class="console-bottom">
-          <div class="console-keys">
-            <kbd>&#9166;</kbd> <span>envoyer</span>
-            <span class="key-sep">&middot;</span>
-            <kbd>&#8679;&#9166;</kbd> <span>nouvelle ligne</span>
+        <div class="input-bottom">
+          <div class="input-hints">
+            <kbd>&#9166;</kbd> envoyer
+            <span class="dot">&middot;</span>
+            <kbd>&#8679;&#9166;</kbd> ligne
           </div>
-          <button class="exec-btn" :disabled="!prompt.trim() || sending" @click="sendPrompt">
-            EXEC
+          <button class="send-btn" :disabled="!prompt.trim() || sending" @click="sendPrompt">
+            <span v-if="sending" class="send-loader"></span>
+            <span v-else>Envoyer</span>
           </button>
         </div>
       </div>
@@ -152,6 +139,7 @@ async function sendPrompt(e) {
     })
     interactions.value.push(result)
     prompt.value = ''
+    if (textareaEl.value) textareaEl.value.style.height = 'auto'
     await nextTick()
     scrollToBottom()
   } catch (e) {
@@ -178,37 +166,58 @@ onMounted(fetchInteractions)
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--bg-main);
+  background: var(--bg);
 }
 
-/* ── Header ── */
+/* ══════════════════════════════════════
+   HEADER
+   ══════════════════════════════════════ */
 .chat-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.9rem 2rem;
+  padding: 1.1rem 3rem;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
 
 .header-left {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: 0.5rem;
-  font-family: 'IBM Plex Mono', monospace;
 }
 
-.header-line { color: var(--border); font-size: 0.8rem; }
-.header-title { font-size: 0.7rem; font-weight: 600; color: var(--text-primary); text-transform: uppercase; letter-spacing: 0.1em; }
-.header-sep { color: var(--border); font-size: 0.65rem; }
-.header-id { font-size: 0.65rem; color: var(--text-muted); }
-.header-model { font-family: 'IBM Plex Mono', monospace; font-size: 0.6rem; color: var(--copper); letter-spacing: 0.06em; opacity: 0.7; }
+.header-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text);
+}
 
-/* ── Messages ── */
+.header-id {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.72rem;
+  color: var(--text-light);
+}
+
+.header-pill {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.65rem;
+  color: var(--text-mid);
+  border: 1px solid var(--border);
+  padding: 0.25rem 0.75rem;
+  border-radius: 50px;
+  letter-spacing: 0.02em;
+}
+
+/* ══════════════════════════════════════
+   MESSAGES
+   ══════════════════════════════════════ */
 .messages {
   flex: 1;
   overflow-y: auto;
-  padding: 2rem;
+  padding: 2.5rem 3rem;
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -216,325 +225,295 @@ onMounted(fetchInteractions)
   scrollbar-color: var(--border) transparent;
 }
 
-/* ── States ── */
 .state-msg {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.75rem;
   justify-content: center;
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 0.65rem;
-  color: var(--text-muted);
-  letter-spacing: 0.06em;
-  margin-top: 4rem;
+  font-size: 0.8rem;
+  color: var(--text-light);
+  margin-top: 6rem;
 }
 
-.state-icon { font-weight: 700; font-size: 0.8rem; }
-.state-error { color: var(--cto-terra); }
-.state-error .state-icon { color: var(--cto-terra); }
+.loader {
+  width: 14px; height: 14px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.state-error { color: #D44A3A; }
 
 /* ── Empty ── */
 .empty-chat {
   display: flex;
-  justify-content: center;
-  margin-top: 6rem;
-}
-
-.empty-terminal {
-  display: flex;
   flex-direction: column;
-  gap: 0.35rem;
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 0.7rem;
-  color: var(--text-muted);
-  letter-spacing: 0.04em;
+  align-items: center;
+  gap: 1.5rem;
+  margin-top: 10rem;
 }
 
-.term-line.dim { opacity: 0.5; }
-.term-cursor { animation: blink 1s step-end infinite; color: var(--copper); }
-@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+.empty-hero {
+  font-size: 6rem;
+  font-weight: 200;
+  color: var(--text);
+  opacity: 0.05;
+  line-height: 1;
+}
 
-/* ── Interaction ── */
+.empty-text {
+  font-size: 0.85rem;
+  color: var(--text-light);
+}
+
+/* ══════════════════════════════════════
+   INTERACTION
+   ══════════════════════════════════════ */
 .interaction {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  padding-bottom: 1.5rem;
-  margin-bottom: 1.5rem;
-  border-bottom: 1px solid var(--border-light);
+  padding-bottom: 2.5rem;
+  margin-bottom: 2.5rem;
+  border-bottom: 1px solid var(--border);
 }
 
 .interaction:last-child { border-bottom: none; margin-bottom: 0; }
 
-/* ── Message ── */
 .msg {
-  padding: 1rem 0;
+  padding: 1.25rem 0;
+}
+
+.msg-head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+/* ── Pills ── */
+.pill {
+  font-size: 0.6rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  padding: 0.3rem 0.85rem;
+  border-radius: 50px;
+}
+
+.pill-user {
+  background: var(--border);
+  color: var(--text-mid);
+}
+
+.pill-llm {
+  background: var(--dark);
+  color: var(--bg);
 }
 
 .msg-meta {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  margin-bottom: 0.6rem;
-}
-
-.msg-tag {
   font-family: 'IBM Plex Mono', monospace;
-  font-size: 0.55rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.15em;
-  color: var(--text-muted);
-  background: var(--bg-card);
-  padding: 0.15rem 0.5rem;
-  border-radius: 2px;
+  font-size: 0.62rem;
+  color: var(--text-light);
 }
 
-.llm-tag {
-  color: var(--copper);
-  background: rgba(184, 135, 90, 0.08);
+/* ── Text ── */
+.msg-text {
+  font-size: 0.95rem;
+  line-height: 1.8;
+  color: var(--text);
 }
 
-.msg-idx {
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 0.5rem;
-  color: var(--text-muted);
-  opacity: 0.5;
-}
-
-.msg-time {
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 0.5rem;
-  color: var(--text-muted);
-  opacity: 0.5;
-}
-
-.msg-content {
-  font-size: 0.88rem;
-  color: var(--text-secondary);
-  line-height: 1.7;
-  font-weight: 300;
-}
-
-.msg-user .msg-content {
+.user-text {
   white-space: pre-wrap;
-  padding-left: 0.75rem;
-  border-left: 2px solid var(--border-light);
+  color: var(--text-mid);
 }
 
-.msg-llm .msg-content {
-  padding-left: 0.75rem;
-  border-left: 2px solid var(--copper);
+.llm-text {
+  color: var(--text);
 }
 
-/* ── Markdown ── */
-.md-content :deep(p) { margin-bottom: 0.75rem; }
+/* ══════════════════════════════════════
+   MARKDOWN
+   ══════════════════════════════════════ */
+.md-content :deep(p) { margin-bottom: 1rem; }
 .md-content :deep(p:last-child) { margin-bottom: 0; }
-.md-content :deep(strong) { font-weight: 600; color: var(--text-primary); }
+.md-content :deep(strong) { font-weight: 600; }
 .md-content :deep(em) { font-style: italic; }
+
 .md-content :deep(code) {
   font-family: 'IBM Plex Mono', monospace;
-  font-size: 0.8rem;
-  background: var(--bg-card);
-  padding: 0.1rem 0.35rem;
+  font-size: 0.85rem;
+  background: rgba(0,0,0,0.05);
+  padding: 0.15rem 0.45rem;
   border-radius: 3px;
-  color: var(--copper-dark);
 }
+
 .md-content :deep(pre) {
-  background: #1E1610;
-  color: #E8E0D4;
-  padding: 1rem;
-  border-radius: 4px;
+  background: var(--dark);
+  color: #E0DCD4;
+  padding: 1.5rem;
+  border-radius: 0;
   overflow-x: auto;
-  margin: 0.75rem 0;
+  margin: 1.25rem 0;
   font-family: 'IBM Plex Mono', monospace;
-  font-size: 0.78rem;
-  line-height: 1.5;
+  font-size: 0.82rem;
+  line-height: 1.7;
+  border: 1px solid var(--dark-border);
 }
+
 .md-content :deep(pre code) {
   background: none;
   padding: 0;
   color: inherit;
 }
+
 .md-content :deep(ul), .md-content :deep(ol) {
-  padding-left: 1.25rem;
-  margin-bottom: 0.75rem;
+  padding-left: 1.5rem;
+  margin-bottom: 1rem;
 }
-.md-content :deep(li) { margin-bottom: 0.25rem; }
+
+.md-content :deep(li) { margin-bottom: 0.35rem; }
+
 .md-content :deep(h1), .md-content :deep(h2), .md-content :deep(h3) {
   font-weight: 600;
-  color: var(--text-primary);
-  margin: 1rem 0 0.5rem 0;
-}
-.md-content :deep(h1) { font-size: 1.1rem; }
-.md-content :deep(h2) { font-size: 1rem; }
-.md-content :deep(h3) { font-size: 0.92rem; }
-.md-content :deep(blockquote) {
-  border-left: 2px solid var(--amb-gold);
-  padding-left: 0.75rem;
-  color: var(--text-muted);
-  margin: 0.5rem 0;
+  color: var(--text);
+  margin: 1.5rem 0 0.5rem 0;
+  letter-spacing: -0.01em;
 }
 
-/* ── Input Area ── */
+.md-content :deep(h1) { font-size: 1.3rem; }
+.md-content :deep(h2) { font-size: 1.15rem; }
+.md-content :deep(h3) { font-size: 1rem; }
+
+.md-content :deep(blockquote) {
+  border-left: 3px solid var(--accent);
+  padding-left: 1.25rem;
+  color: var(--text-mid);
+  margin: 1rem 0;
+}
+
+.md-content :deep(a) {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  transition: color 0.2s ease;
+}
+
+.md-content :deep(a:hover) {
+  color: var(--accent-light);
+}
+
+.md-content :deep(hr) {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 1.5rem 0;
+}
+
+/* ══════════════════════════════════════
+   INPUT
+   ══════════════════════════════════════ */
 .input-area {
   flex-shrink: 0;
-  padding: 0 2rem 1.5rem;
+  padding: 0 3rem 2rem;
 }
 
-.input-console {
-  background: var(--bg-input);
+.input-box {
   border: 1px solid var(--border);
-  border-radius: 6px;
-  transition: border-color 0.2s, box-shadow 0.2s;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.03);
+  border-radius: 0;
+  transition: all 0.3s ease;
+  background: #FFF;
 }
 
-.input-console.focused {
-  border-color: var(--copper);
-  box-shadow: 0 2px 12px rgba(160, 120, 80, 0.1);
+.input-box.focused {
+  border-color: var(--text);
 }
 
-.input-console.disabled {
-  opacity: 0.7;
+.input-box.generating {
+  border-color: var(--accent);
 }
 
-/* ── Console Top Bar ── */
-.console-top {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 0.85rem 0;
-}
-
-.console-prompt {
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 0.72rem;
-  font-weight: 600;
-  color: var(--copper);
-}
-
-.console-label {
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 0.52rem;
-  color: var(--text-muted);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  opacity: 0.5;
-}
-
-.console-status {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-
-.status-dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--copper);
-  animation: statusPulse 1s ease-in-out infinite;
-}
-
-@keyframes statusPulse {
-  0%, 100% { opacity: 0.3; transform: scale(0.9); }
-  50% { opacity: 1; transform: scale(1.1); }
-}
-
-.status-text {
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 0.55rem;
-  color: var(--copper);
-  letter-spacing: 0.08em;
-  animation: statusFade 1.5s ease-in-out infinite;
-}
-
-@keyframes statusFade {
-  0%, 100% { opacity: 0.5; }
-  50% { opacity: 1; }
-}
-
-/* ── Textarea ── */
-.console-input {
+.input-field {
   display: block;
   width: 100%;
-  padding: 0.5rem 0.85rem 0.4rem;
+  padding: 1rem 1.25rem 0.75rem;
   background: transparent;
   border: none;
-  color: var(--text-primary);
+  color: var(--text);
   font-family: 'Inter', sans-serif;
-  font-size: 0.88rem;
+  font-size: 0.95rem;
   font-weight: 400;
-  line-height: 1.55;
+  line-height: 1.6;
   outline: none;
   resize: none;
-  min-height: 2.2rem;
+  min-height: 2.8rem;
   max-height: 160px;
 }
 
-.console-input::placeholder {
-  color: var(--text-muted);
+.input-field::placeholder {
+  color: var(--text-light);
   font-weight: 300;
 }
 
-/* ── Console Bottom Bar ── */
-.console-bottom {
+.input-bottom {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.3rem 0.5rem 0.45rem 0.85rem;
-  border-top: 1px dashed var(--border-light);
+  padding: 0.5rem 0.65rem 0.65rem 1.25rem;
+  border-top: 1px solid var(--border);
 }
 
-.console-keys {
+.input-hints {
   display: flex;
   align-items: center;
-  gap: 0.3rem;
+  gap: 0.35rem;
   font-family: 'IBM Plex Mono', monospace;
-  font-size: 0.5rem;
-  color: var(--text-muted);
-  letter-spacing: 0.02em;
-  opacity: 0.5;
+  font-size: 0.55rem;
+  color: var(--text-light);
 }
 
-.console-keys kbd {
+.input-hints kbd {
   font-family: 'IBM Plex Mono', monospace;
-  font-size: 0.5rem;
-  background: var(--bg-card);
-  padding: 0.08rem 0.3rem;
-  border-radius: 2px;
-  border: 1px solid var(--border-light);
-  color: var(--text-secondary);
-  font-weight: 500;
+  font-size: 0.55rem;
+  background: var(--bg);
+  padding: 0.1rem 0.4rem;
+  border: 1px solid var(--border);
+  color: var(--text-mid);
 }
 
-.key-sep {
-  margin: 0 0.15rem;
-  opacity: 0.3;
-}
+.dot { margin: 0 0.15rem; opacity: 0.3; }
 
-.exec-btn {
-  padding: 0.3rem 1rem;
-  background: transparent;
-  border: 1px solid var(--copper);
-  border-radius: 3px;
-  color: var(--copper);
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 0.6rem;
-  font-weight: 600;
-  letter-spacing: 0.15em;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.exec-btn:hover:not(:disabled) {
-  background: var(--copper);
+.send-btn {
+  padding: 0.5rem 1.5rem;
+  background: var(--dark);
+  border: none;
   color: #FFF;
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  min-width: 90px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.exec-btn:disabled {
-  opacity: 0.25;
+.send-btn:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--dark);
+}
+
+.send-btn:disabled {
+  opacity: 0.15;
   cursor: not-allowed;
+}
+
+.send-loader {
+  width: 12px; height: 12px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: #FFF;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
 }
 </style>
