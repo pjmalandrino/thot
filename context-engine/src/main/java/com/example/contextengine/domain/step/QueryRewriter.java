@@ -12,7 +12,7 @@ import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 @Component
-@Order(2)
+@Order(20)
 public class QueryRewriter implements ContextStep {
 
     private static final Logger log = LoggerFactory.getLogger(QueryRewriter.class);

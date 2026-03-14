@@ -9,6 +9,7 @@ public class ContextEngineProperties {
     private double minConfidence = 0.75;
     private FallbackPolicy fallbackPolicy = FallbackPolicy.CONTINUE;
     private String llmProvider = "ollama";
+    private int maxContextTokens = 8192;
 
     public enum FallbackPolicy {
         CONTINUE, BLOCK
@@ -25,4 +26,7 @@ public class ContextEngineProperties {
 
     public String getLlmProvider() { return llmProvider; }
     public void setLlmProvider(String llmProvider) { this.llmProvider = llmProvider; }
+
+    public int getMaxContextTokens() { return maxContextTokens; }
+    public void setMaxContextTokens(int maxContextTokens) { this.maxContextTokens = maxContextTokens; }
 }

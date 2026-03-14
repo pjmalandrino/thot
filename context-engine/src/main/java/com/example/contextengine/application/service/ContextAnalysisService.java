@@ -7,6 +7,7 @@ import com.example.contextengine.domain.pipeline.PipelineContext;
 import com.example.contextengine.domain.port.in.AnalyzeContextUseCase;
 import com.example.contextengine.domain.port.out.LlmPort;
 import com.example.contextengine.domain.port.out.WebSearchPort;
+import com.example.contextengine.infrastructure.config.ContextEngineProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -21,13 +22,16 @@ public class ContextAnalysisService implements AnalyzeContextUseCase {
     private final ContextPipeline pipeline;
     private final LlmPort llmPort;
     private final WebSearchPort webSearchPort;
+    private final int maxContextTokens;
 
     public ContextAnalysisService(ContextPipeline pipeline,
                                   LlmPort llmPort,
-                                  WebSearchPort webSearchPort) {
+                                  WebSearchPort webSearchPort,
+                                  ContextEngineProperties properties) {
         this.pipeline = pipeline;
         this.llmPort = llmPort;
         this.webSearchPort = webSearchPort;
+        this.maxContextTokens = properties.getMaxContextTokens();
     }
 
     @Override
@@ -39,7 +43,7 @@ public class ContextAnalysisService implements AnalyzeContextUseCase {
 
         PipelineContext context = new PipelineContext(
                 prompt, conversationHistory, documentContext,
-                webSearchRequested, llmPort, webSearchPort);
+                webSearchRequested, llmPort, webSearchPort, maxContextTokens);
 
         ContextAnalysis result = pipeline.run(context);
 

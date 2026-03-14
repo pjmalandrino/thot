@@ -1,6 +1,7 @@
 package com.example.chatinterface.contextengine;
 
 import java.util.List;
+import java.util.Map;
 
 public class ContextEngineResponse {
 
@@ -11,6 +12,8 @@ public class ContextEngineResponse {
     private String rewrittenQuery;
     private List<WebSearchResultDto> webSearchResults;
     private String webSearchContext;
+    private boolean autoWebSearchTriggered;
+    private Map<String, Integer> tokenUsage;
 
     public record WebSearchResultDto(String citationId, String sourceUrl, String sourceTitle, String extractedText) {}
 
@@ -37,4 +40,8 @@ public class ContextEngineResponse {
     public void setWebSearchResults(List<WebSearchResultDto> webSearchResults) { this.webSearchResults = webSearchResults; }
     public String getWebSearchContext() { return webSearchContext; }
     public void setWebSearchContext(String webSearchContext) { this.webSearchContext = webSearchContext; }
+    public boolean isAutoWebSearchTriggered() { return autoWebSearchTriggered; }
+    public void setAutoWebSearchTriggered(boolean autoWebSearchTriggered) { this.autoWebSearchTriggered = autoWebSearchTriggered; }
+    public Map<String, Integer> getTokenUsage() { return tokenUsage; }
+    public void setTokenUsage(Map<String, Integer> tokenUsage) { this.tokenUsage = tokenUsage; }
 }

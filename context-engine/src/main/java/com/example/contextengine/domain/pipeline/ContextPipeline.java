@@ -61,6 +61,8 @@ public class ContextPipeline {
         return ContextAnalysis.continueWith(
                 context.getRewrittenQuery(),
                 context.getWebSearchResults(),
-                context.getWebSearchContext());
+                context.getWebSearchContext(),
+                context.isAutoWebSearchTriggered(),
+                context.getTokenBudget());
     }
 }

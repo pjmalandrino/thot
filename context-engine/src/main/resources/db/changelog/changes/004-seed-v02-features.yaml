@@ -1,0 +1,29 @@
+databaseChangeLog:
+  - changeSet:
+      id: 004-seed-v02-features
+      author: developer
+      changes:
+        - insert:
+            schemaName: context_engine
+            tableName: context_features
+            columns:
+              - column: { name: feature_name, value: 'auto-web-search' }
+              - column: { name: enabled, valueBoolean: true }
+              - column: { name: config_json, value: '{}' }
+              - column: { name: description, value: 'Automatically triggers web search when the query needs fresh data' }
+        - insert:
+            schemaName: context_engine
+            tableName: context_features
+            columns:
+              - column: { name: feature_name, value: 'web-search-relevance' }
+              - column: { name: enabled, valueBoolean: true }
+              - column: { name: config_json, value: '{"minRelevanceScore": 0.15}' }
+              - column: { name: description, value: 'Filters web search results by relevance to the query' }
+        - insert:
+            schemaName: context_engine
+            tableName: context_features
+            columns:
+              - column: { name: feature_name, value: 'context-budget' }
+              - column: { name: enabled, valueBoolean: true }
+              - column: { name: config_json, value: '{}' }
+              - column: { name: description, value: 'Manages token budget across context sections to stay within model limits' }

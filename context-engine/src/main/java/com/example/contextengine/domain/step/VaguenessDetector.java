@@ -14,7 +14,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Component
-@Order(1)
+@Order(10)
 public class VaguenessDetector implements ContextStep {
 
     private static final Logger log = LoggerFactory.getLogger(VaguenessDetector.class);

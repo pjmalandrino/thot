@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 
 @Component
-@Order(3)
+@Order(30)
 public class WebSearchEnricher implements ContextStep {
 
     private static final Logger log = LoggerFactory.getLogger(WebSearchEnricher.class);
