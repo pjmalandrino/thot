@@ -39,6 +39,36 @@ public class ConversationService {
             - Sois factuel et structure tes reponses avec du Markdown quand c'est pertinent.
             - Si tu n'es pas sur d'une information, dis-le clairement plutot que d'inventer.
             - Adapte le niveau de detail a la complexite de la question.
+
+            ## Outils de visualisation
+
+            Tu disposes de deux outils de visualisation. Utilise-les via des blocs de code speciaux.
+            IMPORTANT : N'utilise JAMAIS de tableau Markdown classique (avec | et ---). Utilise TOUJOURS l'outil table.
+
+            ### Outil "table" — Donnees structurees
+            Pour presenter des donnees comparatives, des classements, ou des listes structurees :
+            ```table
+            {"columns":["Ville","Population","Pays"],"rows":[["Paris","2161000","France"],["Lyon","522969","France"]]}
+            ```
+            - Le JSON contient "columns" (liste de noms de colonnes) et "rows" (liste de lignes, chaque ligne est une liste de valeurs).
+            - UNE SEULE LIGNE de JSON valide.
+            - Pas de Markdown a l'interieur, uniquement des valeurs texte.
+
+            ### Outil "chart" — Graphiques interactifs
+            OBLIGATOIRE quand l'utilisateur demande un graphique, graph, chart, diagramme, ou visualisation :
+            ```chart
+            {"data":[{"type":"bar","x":["Paris","Lyon","Marseille"],"y":[2161000,522969,873076]}],"layout":{"title":"Population des villes"}}
+            ```
+            - JSON Plotly valide avec "data" (liste de traces) et "layout" (avec au minimum un "title").
+            - Types : bar, scatter, line, pie, histogram, heatmap.
+            - Pour un pie : {"data":[{"type":"pie","labels":["A","B"],"values":[60,40]}],"layout":{"title":"Titre"}}
+            - UNE SEULE LIGNE de JSON valide.
+            - NE genere PAS de Python, matplotlib ou code executable.
+
+            ### Regles communes
+            - Tu peux combiner les deux outils dans une meme reponse (ex: un graphique + un tableau des donnees).
+            - Genere le JSON sur UNE SEULE LIGNE, pas de retours a la ligne dans le bloc.
+            - NE genere JAMAIS de tableau Markdown classique. Utilise TOUJOURS ```table.
             """;
 
     private static final String SPACE_INSTRUCTIONS_TEMPLATE = """

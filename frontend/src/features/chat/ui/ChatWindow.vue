@@ -39,7 +39,7 @@
               <span v-if="item.autoWebSearchTriggered" class="pill pill-auto">Auto</span>
               <span class="msg-meta">{{ formatDateTime(item.createdAt) }}</span>
             </div>
-            <div class="msg-text llm-text md-content" v-html="renderResponse(item.response, item.sources)"></div>
+            <div class="msg-text llm-text md-content" v-html="renderMarkdown(item.response, item.sources)"></div>
             <SourcesFooter :sources="item.sources" />
           </div>
         </div>
@@ -131,8 +131,9 @@
 
 <script setup>
 import { ref, computed, onMounted, nextTick } from 'vue'
-import { marked } from 'marked'
 import { formatDateTime } from '../../../shared/utils/date.js'
+import { renderMarkdown } from './markdown.js'
+import { useChartRenderer } from './useChartRenderer.js'
 import { useModelStore } from '../../llm-model/store.js'
 import { useThotspaceStore } from '../../thotspace/store.js'
 import { useDocumentStore } from '../../document/store.js'
@@ -141,8 +142,6 @@ import ModelSelect from '../../llm-model/ui/ModelSelect.vue'
 import DocumentAttachment from '../../document/ui/DocumentAttachment.vue'
 import ThinkingIndicator from './ThinkingIndicator.vue'
 import SourcesFooter from './SourcesFooter.vue'
-
-marked.setOptions({ breaks: true, gfm: true })
 
 const props = defineProps({ conversationId: { type: Number, required: true } })
 
@@ -162,33 +161,8 @@ const inputFocused = ref(false)
 const clarification = ref(null)
 const pendingPrompt = ref('')
 
-/**
- * Render markdown with citation badges.
- * Replaces [N] patterns with clickable citation links when sources are available.
- */
-function renderResponse(text, sources) {
-  if (!text) return ''
-  let html = marked.parse(text)
-
-  if (sources && sources.length) {
-    const sourceMap = {}
-    sources.forEach(s => { sourceMap[s.citationId] = s })
-
-    // Replace [1], [2], etc. with citation badges
-    html = html.replace(/\[(\d+)\]/g, (match, num) => {
-      const cid = `[${num}]`
-      const src = sourceMap[cid]
-      if (src) {
-        const title = (src.sourceTitle || '').replace(/"/g, '&quot;')
-        const snippet = (src.extractedText || '').replace(/"/g, '&quot;').substring(0, 120)
-        return `<a href="${src.sourceUrl}" target="_blank" rel="noopener" class="citation-inline" title="${title}${snippet ? ' — ' + snippet : ''}">${cid}</a>`
-      }
-      return match
-    })
-  }
-
-  return html
-}
+// Chart rendering: scans messages for chart placeholders and mounts Plotly.js
+useChartRenderer(messagesEl, interactions)
 
 function formatCharCount(charCount) {
   if (charCount < 1000) return charCount + ' car.'
@@ -597,6 +571,119 @@ onMounted(() => {
   border: none;
   border-top: 1px solid var(--border);
   margin: 1.5rem 0;
+}
+
+/* ══════════════════════════════════════
+   TABLE
+   ══════════════════════════════════════ */
+.md-content :deep(table) {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin: 1.5rem 0;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  display: block;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--border);
+}
+
+.md-content :deep(thead) {
+  background: var(--dark);
+}
+
+.md-content :deep(th) {
+  padding: 0.7rem 1.1rem;
+  text-align: left;
+  font-family: 'IBM Plex Mono', monospace;
+  font-weight: 500;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--accent);
+  border-bottom: 2px solid var(--accent);
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+}
+
+.md-content :deep(th:not(:last-child)) {
+  border-right: 1px solid var(--dark-border);
+}
+
+.md-content :deep(td) {
+  padding: 0.6rem 1.1rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  vertical-align: top;
+}
+
+.md-content :deep(td:not(:last-child)) {
+  border-right: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+.md-content :deep(tbody tr:nth-child(even)) {
+  background: rgba(0, 0, 0, 0.018);
+}
+
+.md-content :deep(tbody tr:hover) {
+  background: rgba(212, 164, 56, 0.06);
+}
+
+.md-content :deep(tbody tr:first-child td) {
+  padding-top: 0.75rem;
+}
+
+/* Première colonne en accent subtil (souvent un rang / ID) */
+.md-content :deep(tbody td:first-child) {
+  font-family: 'IBM Plex Mono', monospace;
+  font-weight: 500;
+  font-size: 0.78rem;
+  color: var(--text-mid);
+}
+
+.md-content :deep(.table-error-msg) {
+  padding: 0.75rem 1rem;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.72rem;
+  color: #D44A3A;
+  border-left: 3px solid #D44A3A;
+  margin: 1rem 0;
+}
+
+/* ══════════════════════════════════════
+   CHART
+   ══════════════════════════════════════ */
+.md-content :deep(.chart-placeholder) {
+  margin: 1.25rem 0;
+  min-height: 300px;
+  border: 1px solid var(--border);
+  background: #FFF;
+}
+
+.md-content :deep(.chart-loading) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 300px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.72rem;
+  color: var(--text-light);
+  letter-spacing: 0.04em;
+}
+
+.md-content :deep(.chart-error-msg) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.72rem;
+  color: #D44A3A;
+  padding: 1rem;
+  text-align: center;
 }
 
 /* ══════════════════════════════════════
