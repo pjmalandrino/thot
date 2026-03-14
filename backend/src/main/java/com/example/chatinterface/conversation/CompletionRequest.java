@@ -5,6 +5,7 @@ public class CompletionRequest {
     private String prompt;
     private boolean webSearch;
     private Long modelId;   // null = fallback sur le premier modèle enabled
+    private String clarificationContext;  // réponse à une demande de clarification
 
     public String getPrompt() { return prompt; }
     public void setPrompt(String prompt) { this.prompt = prompt; }
@@ -14,4 +15,7 @@ public class CompletionRequest {
 
     public Long getModelId() { return modelId; }
     public void setModelId(Long modelId) { this.modelId = modelId; }
+
+    public String getClarificationContext() { return clarificationContext; }
+    public void setClarificationContext(String clarificationContext) { this.clarificationContext = clarificationContext; }
 }

@@ -45,10 +45,7 @@ public class ConversationController {
     @PostMapping("/{id}/completions")
     @ResponseStatus(HttpStatus.CREATED)
     public CompletionResponse complete(@PathVariable Long id, @RequestBody CompletionRequest request) {
-        LlmInteraction interaction = request.isWebSearch()
-                ? conversationService.completeWithWebSearch(id, request.getPrompt(), request.getModelId())
-                : conversationService.complete(id, request.getPrompt(), request.getModelId());
-        return CompletionResponse.from(interaction);
+        return conversationService.complete(id, request.getPrompt(), request.getModelId(), request.getClarificationContext());
     }
 
     @PatchMapping("/{id}")

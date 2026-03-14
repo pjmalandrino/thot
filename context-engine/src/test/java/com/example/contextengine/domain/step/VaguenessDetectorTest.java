@@ -1,5 +1,6 @@
 package com.example.contextengine.domain.step;
 
+import com.example.contextengine.domain.model.ConversationMessage;
 import com.example.contextengine.domain.model.StepResult;
 import com.example.contextengine.domain.pipeline.PipelineContext;
 import com.example.contextengine.domain.port.out.LlmPort;
@@ -9,6 +10,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -88,5 +91,89 @@ class VaguenessDetectorTest {
     @DisplayName("featureName retourne vagueness-detection")
     void featureNameIsCorrect() {
         assertThat(detector.featureName()).isEqualTo("vagueness-detection");
+    }
+
+    // ── Contextual prompt enrichment ─────────────────────────────────────────
+
+    @Test
+    @DisplayName("buildContextualPrompt retourne le prompt brut sans contexte")
+    void contextualPromptWithoutContext() {
+        PipelineContext ctx = context("aide moi");
+        String result = detector.buildContextualPrompt("aide moi", ctx);
+        assertThat(result).isEqualTo("aide moi");
+    }
+
+    @Test
+    @DisplayName("buildContextualPrompt inclut l'historique de conversation")
+    void contextualPromptWithHistory() {
+        List<ConversationMessage> history = List.of(
+                new ConversationMessage("user", "Comment deployer avec Docker ?"),
+                new ConversationMessage("assistant", "Voici les etapes pour deployer avec Docker...")
+        );
+        PipelineContext ctx = new PipelineContext("aide moi", history, null, false, llmPort, webSearchPort);
+
+        String result = detector.buildContextualPrompt("aide moi", ctx);
+
+        assertThat(result).contains("Historique recent de la conversation");
+        assertThat(result).contains("Utilisateur: Comment deployer avec Docker ?");
+        assertThat(result).contains("Assistant: Voici les etapes pour deployer avec Docker...");
+        assertThat(result).contains("## Message a analyser");
+        assertThat(result).endsWith("aide moi");
+    }
+
+    @Test
+    @DisplayName("buildContextualPrompt inclut le contexte documentaire")
+    void contextualPromptWithDocuments() {
+        PipelineContext ctx = new PipelineContext(
+                "aide moi", null, "Document: Guide Spring Boot - contenu technique...",
+                false, llmPort, webSearchPort);
+
+        String result = detector.buildContextualPrompt("aide moi", ctx);
+
+        assertThat(result).contains("Documents attaches a la conversation");
+        assertThat(result).contains("Guide Spring Boot");
+        assertThat(result).contains("## Message a analyser");
+        assertThat(result).endsWith("aide moi");
+    }
+
+    @Test
+    @DisplayName("buildContextualPrompt tronque les messages longs de l'historique")
+    void contextualPromptTruncatesLongMessages() {
+        String longContent = "A".repeat(300);
+        List<ConversationMessage> history = List.of(
+                new ConversationMessage("user", longContent)
+        );
+        PipelineContext ctx = new PipelineContext("aide moi", history, null, false, llmPort, webSearchPort);
+
+        String result = detector.buildContextualPrompt("aide moi", ctx);
+
+        // Content should be truncated to 200 chars + "..."
+        assertThat(result).contains("A".repeat(200) + "...");
+        assertThat(result).doesNotContain("A".repeat(201));
+    }
+
+    @Test
+    @DisplayName("buildContextualPrompt limite a 6 messages d'historique")
+    void contextualPromptLimitsHistoryTo6() {
+        List<ConversationMessage> history = List.of(
+                new ConversationMessage("user", "msg1"),
+                new ConversationMessage("assistant", "rep1"),
+                new ConversationMessage("user", "msg2"),
+                new ConversationMessage("assistant", "rep2"),
+                new ConversationMessage("user", "msg3"),
+                new ConversationMessage("assistant", "rep3"),
+                new ConversationMessage("user", "msg4"),
+                new ConversationMessage("assistant", "rep4")
+        );
+        PipelineContext ctx = new PipelineContext("aide moi", history, null, false, llmPort, webSearchPort);
+
+        String result = detector.buildContextualPrompt("aide moi", ctx);
+
+        // Should NOT contain msg1/rep1 (they're older than the last 6)
+        assertThat(result).doesNotContain("msg1");
+        assertThat(result).doesNotContain("rep1");
+        // Should contain msg2 onward (the last 6 entries)
+        assertThat(result).contains("msg2");
+        assertThat(result).contains("rep4");
     }
 }

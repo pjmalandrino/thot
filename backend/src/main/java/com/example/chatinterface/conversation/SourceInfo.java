@@ -5,6 +5,7 @@ public class SourceInfo {
     private String citationId;
     private String sourceUrl;
     private String sourceTitle;
+    private String extractedText;
 
     public SourceInfo() {}
 
@@ -12,6 +13,11 @@ public class SourceInfo {
         this.citationId = citationId;
         this.sourceUrl = sourceUrl;
         this.sourceTitle = sourceTitle;
+    }
+
+    public SourceInfo(String citationId, String sourceUrl, String sourceTitle, String extractedText) {
+        this(citationId, sourceUrl, sourceTitle);
+        this.extractedText = extractedText;
     }
 
     public String getCitationId() { return citationId; }
@@ -22,4 +28,7 @@ public class SourceInfo {
 
     public String getSourceTitle() { return sourceTitle; }
     public void setSourceTitle(String sourceTitle) { this.sourceTitle = sourceTitle; }
+
+    public String getExtractedText() { return extractedText; }
+    public void setExtractedText(String extractedText) { this.extractedText = extractedText; }
 }

@@ -251,10 +251,11 @@ class ConversationServiceTest {
                 return i;
             });
 
-            LlmInteraction result = conversationService.complete(10L, "Bonjour", 1L);
+            CompletionResponse result = conversationService.complete(10L, "Bonjour", 1L);
 
             assertThat(result.getPrompt()).isEqualTo("Bonjour");
             assertThat(result.getResponse()).isEqualTo("Reponse du LLM");
+            assertThat(result.getStatus()).isEqualTo("continue");
             verify(contextEngineClient).analyze(any());
             verify(llmGateway).generate(any());
         }
@@ -329,14 +330,14 @@ class ConversationServiceTest {
         }
     }
 
-    // ── completeWithWebSearch ────────────────────────────────────────────
+    // ── complete with web search results ──────────────────────────────────
 
     @Nested
-    @DisplayName("completeWithWebSearch")
+    @DisplayName("complete with web search")
     class CompleteWithWebSearch {
 
         @Test
-        @DisplayName("appelle le context-engine avec webSearch et injecte les sources")
+        @DisplayName("injecte les sources web du context-engine dans la reponse")
         void searchAndInjectSources() {
             when(conversationRepository.findById(10L)).thenReturn(Optional.of(conversation));
             when(documentService.buildDocumentContext(10L)).thenReturn(null);
@@ -352,9 +353,10 @@ class ConversationServiceTest {
                 return i;
             });
 
-            LlmInteraction result = conversationService.completeWithWebSearch(10L, "question", null);
+            CompletionResponse result = conversationService.complete(10L, "question", null);
 
             assertThat(result.getResponse()).contains("sources [1]");
+            assertThat(result.getStatus()).isEqualTo("continue");
             verify(contextEngineClient).analyze(any());
 
             ArgumentCaptor<LlmInteraction> captor = ArgumentCaptor.forClass(LlmInteraction.class);
@@ -362,6 +364,7 @@ class ConversationServiceTest {
             LlmInteraction saved = captor.getValue();
             assertThat(saved.getSources()).hasSize(1);
             assertThat(saved.getSources().get(0).getSourceUrl()).isEqualTo("https://example.com");
+            assertThat(saved.getSources().get(0).getExtractedText()).isEqualTo("Contenu extrait");
         }
     }
 
@@ -372,23 +375,21 @@ class ConversationServiceTest {
     class Clarification {
 
         @Test
-        @DisplayName("retourne la clarification du context-engine sans appeler le LLM")
+        @DisplayName("retourne la clarification du context-engine sans appeler le LLM ni persister")
         void returnsContextEngineClarification() {
             when(conversationRepository.findById(10L)).thenReturn(Optional.of(conversation));
             when(documentService.buildDocumentContext(10L)).thenReturn(null);
             when(interactionRepository.findByConversationIdOrderByCreatedAtAsc(10L))
                     .thenReturn(List.of());
             when(contextEngineClient.analyze(any())).thenReturn(clarificationResponse());
-            when(interactionRepository.save(any(LlmInteraction.class))).thenAnswer(inv -> {
-                LlmInteraction i = inv.getArgument(0);
-                setId(i, 1L);
-                return i;
-            });
 
-            LlmInteraction result = conversationService.complete(10L, "Aide-moi", null);
+            CompletionResponse result = conversationService.complete(10L, "Aide-moi", null);
 
-            assertThat(result.getResponse()).isEqualTo("Votre question manque de precision.");
+            assertThat(result.getStatus()).isEqualTo("clarification_needed");
+            assertThat(result.getClarificationMessage()).isEqualTo("Votre question manque de precision.");
+            assertThat(result.getSuggestions()).containsExactly("Question 1 ?", "Question 2 ?");
             verify(llmGateway, never()).generate(any());
+            verify(interactionRepository, never()).save(any());
         }
     }
 

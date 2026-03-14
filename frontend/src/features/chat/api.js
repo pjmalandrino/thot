@@ -4,9 +4,11 @@ export function fetchCompletions(conversationId) {
   return apiFetch(`/api/conversations/${conversationId}/completions`)
 }
 
-export function sendCompletion(conversationId, { prompt, webSearch, modelId }) {
+export function sendCompletion(conversationId, { prompt, modelId, clarificationContext }) {
+  const body = { prompt, modelId }
+  if (clarificationContext) body.clarificationContext = clarificationContext
   return apiFetch(`/api/conversations/${conversationId}/completions`, {
     method: 'POST',
-    body: JSON.stringify({ prompt, webSearch, modelId })
+    body: JSON.stringify(body)
   })
 }

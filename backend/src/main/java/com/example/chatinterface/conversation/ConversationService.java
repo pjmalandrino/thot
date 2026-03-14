@@ -64,6 +64,14 @@ public class ConversationService {
             %s
             """;
 
+    private static final String CLARIFICATION_CONTEXT_TEMPLATE = """
+
+            ## Precision de l'utilisateur
+            La question de l'utilisateur etait initialement vague. Il a precise son intention :
+            "%s"
+            Utilise cette precision pour orienter ta reponse de maniere pertinente.
+            """;
+
     private static final String DOCUMENT_CONTEXT_TEMPLATE = """
 
             ## Documents attaches
@@ -150,32 +158,80 @@ public class ConversationService {
         return interactionRepository.findByConversationIdOrderByCreatedAtAsc(conversationId);
     }
 
-    public LlmInteraction complete(Long conversationId, String prompt, Long modelId) {
-        return complete(conversationId, prompt, modelId, false);
+    /**
+     * Unified completion: context-engine decides about web search (auto-trigger).
+     * Returns CompletionResponse with full pipeline metadata.
+     */
+    public CompletionResponse complete(Long conversationId, String prompt, Long modelId) {
+        return complete(conversationId, prompt, modelId, null);
     }
 
-    public LlmInteraction completeWithWebSearch(Long conversationId, String prompt, Long modelId) {
-        return complete(conversationId, prompt, modelId, true);
-    }
-
-    private LlmInteraction complete(Long conversationId, String prompt, Long modelId, boolean webSearch) {
+    /**
+     * Completion with optional clarification context.
+     * When clarificationContext is present, the user has already answered a clarification question —
+     * we skip the context-engine (no re-vagueness check) and inject the clarification transparently.
+     */
+    public CompletionResponse complete(Long conversationId, String prompt, Long modelId, String clarificationContext) {
         Conversation conversation = conversationRepository.findById(conversationId)
                 .orElseThrow(() -> new RuntimeException("Conversation not found"));
 
-        // 1. Call context-engine for pre-processing
+        String documentContext = documentService.buildDocumentContext(conversationId);
+
+        // Fast path: clarification response → skip context-engine, go straight to LLM
+        if (clarificationContext != null && !clarificationContext.isBlank()) {
+            log.info("[COMPLETION] Clarification context present, skipping context-engine");
+            return completeWithClarification(conversation, prompt, modelId, clarificationContext, documentContext);
+        }
+
+        // Normal path: full context-engine pipeline
+        return completeWithPipeline(conversation, prompt, modelId, documentContext);
+    }
+
+    private CompletionResponse completeWithClarification(
+            Conversation conversation, String prompt, Long modelId,
+            String clarificationContext, String documentContext) {
+
+        // Build system prompt with clarification hint
+        String systemPromptText = buildSystemPrompt(
+                conversation.getThotspace(), documentContext, null);
+        systemPromptText += String.format(CLARIFICATION_CONTEXT_TEMPLATE, clarificationContext);
+
+        // Build memory and generate
+        ChatMemory memory = buildMemory(conversation.getId());
+        memory.add(SystemMessage.from(systemPromptText));
+        memory.add(UserMessage.from(prompt));
+
+        LlmGateway gateway = resolveGateway(modelId);
+        String response = gateway.generate(memory.messages());
+
+        // Persist with original prompt only (clarification stays invisible)
+        LlmInteraction interaction = interactionRepository.save(
+                new LlmInteraction(conversation, prompt, response));
+
+        autoTitle(conversation, prompt);
+
+        return CompletionResponse.from(interaction);
+    }
+
+    private CompletionResponse completeWithPipeline(
+            Conversation conversation, String prompt, Long modelId, String documentContext) {
+
+        // 1. Call context-engine — auto-search decides about web
         ContextEngineRequest ceRequest = new ContextEngineRequest();
         ceRequest.setPrompt(prompt);
-        ceRequest.setWebSearchRequested(webSearch);
-        ceRequest.setDocumentContext(documentService.buildDocumentContext(conversationId));
-        ceRequest.setConversationHistory(buildRecentHistory(conversationId));
+        ceRequest.setWebSearchRequested(false);
+        ceRequest.setDocumentContext(documentContext);
+        ceRequest.setConversationHistory(buildRecentHistory(conversation.getId()));
 
         ContextEngineResponse ceResponse = contextEngineClient.analyze(ceRequest);
 
-        // 2. If clarification needed, return it directly
+        // 2. If clarification needed, return without persisting
         if (!ceResponse.isContinue()) {
-            LlmInteraction interaction = interactionRepository.save(
-                    new LlmInteraction(conversation, prompt, ceResponse.getClarificationMessage()));
-            return interaction;
+            return CompletionResponse.clarification(
+                    prompt,
+                    ceResponse.getClarificationMessage(),
+                    ceResponse.getSuggestions(),
+                    ceResponse.getConfidence());
         }
 
         // 3. Use the rewritten query if available
@@ -184,22 +240,21 @@ public class ConversationService {
                 : prompt;
 
         // 4. Build system prompt with web search context if present
-        String documentContext = documentService.buildDocumentContext(conversationId);
         String systemPromptText = buildSystemPrompt(
                 conversation.getThotspace(), documentContext, ceResponse.getWebSearchContext());
 
         // 5. Build memory and generate
-        ChatMemory memory = buildMemory(conversationId);
+        ChatMemory memory = buildMemory(conversation.getId());
         memory.add(SystemMessage.from(systemPromptText));
         memory.add(UserMessage.from(effectivePrompt));
 
         LlmGateway gateway = resolveGateway(modelId);
         String response = gateway.generate(memory.messages());
 
-        // 6. Persist with sources from web search
+        // 6. Persist with sources (including extractedText)
         List<SourceInfo> sourceInfos = ceResponse.getWebSearchResults() != null
                 ? ceResponse.getWebSearchResults().stream()
-                    .map(r -> new SourceInfo(r.citationId(), r.sourceUrl(), r.sourceTitle()))
+                    .map(r -> new SourceInfo(r.citationId(), r.sourceUrl(), r.sourceTitle(), r.extractedText()))
                     .toList()
                 : List.of();
 
@@ -208,7 +263,13 @@ public class ConversationService {
                 : interactionRepository.save(new LlmInteraction(conversation, prompt, response, sourceInfos));
 
         autoTitle(conversation, prompt);
-        return interaction;
+
+        // 7. Return enriched response with pipeline metadata
+        return CompletionResponse.from(interaction)
+                .withPipelineMetadata(
+                        ceResponse.getRewrittenQuery(),
+                        ceResponse.isAutoWebSearchTriggered(),
+                        ceResponse.getTokenUsage());
     }
 
     @Transactional

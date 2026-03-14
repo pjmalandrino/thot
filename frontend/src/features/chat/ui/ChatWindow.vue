@@ -19,11 +19,11 @@
         <span>{{ error }}</span>
       </div>
       <template v-else>
-        <div v-if="interactions.length === 0" class="empty-chat">
+        <div v-if="interactions.length === 0 && !clarification" class="empty-chat">
           <span class="empty-hero">?</span>
           <span class="empty-text">En attente d'une instruction</span>
         </div>
-        <div v-for="(item, idx) in interactions" :key="item.id" class="interaction">
+        <div v-for="(item, idx) in interactions" :key="item.id || idx" class="interaction">
           <div class="msg msg-user">
             <div class="msg-head">
               <span class="pill pill-user">Vous</span>
@@ -32,65 +32,47 @@
             <p class="msg-text user-text">{{ item.prompt }}</p>
           </div>
 
-          <!-- Sources panel (Perplexity-style) -->
-          <div v-if="item.sources && item.sources.length" class="sources-panel">
-            <div class="sources-header">
-              <span class="sources-icon">&#9906;</span>
-              <span class="sources-label">Sources</span>
-              <span class="sources-count">{{ item.sources.length }}</span>
-            </div>
-            <div class="sources-list">
-              <a
-                v-for="src in item.sources"
-                :key="src.citationId"
-                :href="src.sourceUrl"
-                target="_blank"
-                rel="noopener"
-                class="source-card"
-              >
-                <span class="source-citation">{{ src.citationId }}</span>
-                <span class="source-title">{{ src.sourceTitle || 'Sans titre' }}</span>
-                <span class="source-url">{{ formatUrl(src.sourceUrl) }}</span>
-              </a>
-            </div>
-          </div>
-
           <div class="msg msg-llm">
             <div class="msg-head">
               <span class="pill pill-llm">Thot</span>
-              <span v-if="item.sources" class="pill pill-web">Web</span>
+              <span v-if="item.sources && item.sources.length" class="pill pill-web">Web</span>
+              <span v-if="item.autoWebSearchTriggered" class="pill pill-auto">Auto</span>
               <span class="msg-meta">{{ formatDateTime(item.createdAt) }}</span>
             </div>
-            <div class="msg-text llm-text md-content" v-html="renderMarkdown(item.response)"></div>
+            <div class="msg-text llm-text md-content" v-html="renderResponse(item.response, item.sources)"></div>
+            <SourcesFooter :sources="item.sources" />
+          </div>
+        </div>
+
+        <!-- Inline clarification (in the chat flow, not as external card) -->
+        <div v-if="clarification" class="interaction clarification-interaction">
+          <div class="msg msg-user">
+            <div class="msg-head">
+              <span class="pill pill-user">Vous</span>
+            </div>
+            <p class="msg-text user-text">{{ clarification.prompt }}</p>
+          </div>
+          <div class="msg msg-clarification">
+            <div class="msg-head">
+              <span class="pill pill-llm">Thot</span>
+              <span class="pill pill-clarification">Clarification</span>
+            </div>
+            <p class="msg-text clarification-text">{{ clarification.clarificationMessage }}</p>
+            <div v-if="clarification.suggestions && clarification.suggestions.length" class="clarification-suggestions">
+              <button
+                v-for="(s, i) in clarification.suggestions"
+                :key="i"
+                class="suggestion-btn"
+                @click="useSuggestion(s)"
+              >{{ s }}</button>
+            </div>
+            <button class="skip-btn" @click="skipClarification">Envoyer quand meme</button>
           </div>
         </div>
       </template>
 
-      <!-- Searching / analyzing indicator -->
-      <div v-if="searchStatus" class="search-status">
-        <span class="search-dot"></span>
-        <span>{{ searchStatus }}</span>
-      </div>
-    </div>
-
-    <!-- Clarification card -->
-    <div v-if="clarification" class="clarification-card">
-      <div class="clarification-header">
-        <span class="clarification-icon">&#9888;</span>
-        <span class="clarification-title">Clarification suggérée</span>
-        <span v-if="clarification.confidence" class="clarification-confidence">{{ Math.round(clarification.confidence * 100) }}%</span>
-        <button class="clarification-dismiss" @click="dismissClarification" title="Fermer">&times;</button>
-      </div>
-      <p class="clarification-reason">{{ clarification.message }}</p>
-      <div v-if="clarification.suggestions && clarification.suggestions.length" class="clarification-suggestions">
-        <button
-          v-for="(s, i) in clarification.suggestions"
-          :key="i"
-          class="suggestion-btn"
-          @click="useSuggestion(s)"
-        >{{ s }}</button>
-      </div>
-      <button class="skip-btn" @click="skipClarification">Répondre quand même</button>
+      <!-- Thinking indicator (replaces old search-status) -->
+      <ThinkingIndicator :visible="sending" />
     </div>
 
     <div class="input-area">
@@ -132,24 +114,6 @@
             <kbd>&#8679;&#9166;</kbd> ligne
           </div>
           <div class="input-actions">
-            <button
-              class="action-toggle"
-              :class="{ active: contextEngineering }"
-              @click="contextEngineering = !contextEngineering"
-              type="button"
-              title="Analyse contextuelle"
-            >
-              Contexte
-            </button>
-            <button
-              class="action-toggle"
-              :class="{ active: webSearch }"
-              @click="webSearch = !webSearch"
-              type="button"
-              title="Recherche web"
-            >
-              Web
-            </button>
             <DocumentAttachment
               :conversation-id="conversationId"
               :disabled="sending"
@@ -173,9 +137,10 @@ import { useModelStore } from '../../llm-model/store.js'
 import { useThotspaceStore } from '../../thotspace/store.js'
 import { useDocumentStore } from '../../document/store.js'
 import { fetchCompletions, sendCompletion } from '../api.js'
-import { analyzeContext } from '../../context/api.js'
 import ModelSelect from '../../llm-model/ui/ModelSelect.vue'
 import DocumentAttachment from '../../document/ui/DocumentAttachment.vue'
+import ThinkingIndicator from './ThinkingIndicator.vue'
+import SourcesFooter from './SourcesFooter.vue'
 
 marked.setOptions({ breaks: true, gfm: true })
 
@@ -194,25 +159,35 @@ const error = ref('')
 const messagesEl = ref(null)
 const textareaEl = ref(null)
 const inputFocused = ref(false)
-const webSearch = ref(false)
-const contextEngineering = ref(false)
 const clarification = ref(null)
 const pendingPrompt = ref('')
-const searchStatus = ref('')
 
-function renderMarkdown(text) {
+/**
+ * Render markdown with citation badges.
+ * Replaces [N] patterns with clickable citation links when sources are available.
+ */
+function renderResponse(text, sources) {
   if (!text) return ''
-  return marked.parse(text)
-}
+  let html = marked.parse(text)
 
-function formatUrl(url) {
-  if (!url) return ''
-  try {
-    const u = new URL(url)
-    return u.hostname.replace('www.', '')
-  } catch {
-    return url
+  if (sources && sources.length) {
+    const sourceMap = {}
+    sources.forEach(s => { sourceMap[s.citationId] = s })
+
+    // Replace [1], [2], etc. with citation badges
+    html = html.replace(/\[(\d+)\]/g, (match, num) => {
+      const cid = `[${num}]`
+      const src = sourceMap[cid]
+      if (src) {
+        const title = (src.sourceTitle || '').replace(/"/g, '&quot;')
+        const snippet = (src.extractedText || '').replace(/"/g, '&quot;').substring(0, 120)
+        return `<a href="${src.sourceUrl}" target="_blank" rel="noopener" class="citation-inline" title="${title}${snippet ? ' — ' + snippet : ''}">${cid}</a>`
+      }
+      return match
+    })
   }
+
+  return html
 }
 
 function formatCharCount(charCount) {
@@ -246,82 +221,65 @@ async function sendPrompt(e) {
 
   const currentPrompt = prompt.value.trim()
   clarification.value = null
-
-  // Step 1 : Analyse contextuelle (si activee)
-  if (contextEngineering.value) {
-    sending.value = true
-    error.value = ''
-    searchStatus.value = 'Analyse contextuelle...'
-    await nextTick()
-    scrollToBottom()
-
-    try {
-      const analysis = await analyzeContext(
-        currentPrompt,
-        ['vagueness']
-      )
-
-      if (analysis.status !== 'continue') {
-        // Interruption : afficher la carte de clarification
-        clarification.value = analysis
-        pendingPrompt.value = currentPrompt
-        searchStatus.value = ''
-        sending.value = false
-        return
-      }
-    } catch (err) {
-      // Fail-open cote frontend : si l'analyse echoue, on continue
-      console.warn('[CONTEXT] Analysis failed, continuing:', err.message)
-    }
-
-    searchStatus.value = ''
-  }
-
-  // Step 2 : Completion (inchange)
-  await doCompletion(currentPrompt)
-}
-
-async function doCompletion(text) {
   sending.value = true
   error.value = ''
 
-  try {
-    if (webSearch.value) {
-      searchStatus.value = 'Recherche web en cours...'
-      await nextTick()
-      scrollToBottom()
-    }
+  await nextTick()
+  scrollToBottom()
 
+  try {
     const result = await sendCompletion(props.conversationId, {
-      prompt: text,
-      webSearch: webSearch.value,
+      prompt: currentPrompt,
       modelId: modelStore.selectedModelId
     })
 
-    searchStatus.value = ''
-    interactions.value.push(result)
-    prompt.value = ''
-    pendingPrompt.value = ''
-    if (textareaEl.value) textareaEl.value.style.height = 'auto'
+    // Handle clarification from context-engine
+    if (result.status === 'clarification_needed') {
+      clarification.value = result
+      pendingPrompt.value = currentPrompt
+    } else {
+      interactions.value.push(result)
+      prompt.value = ''
+      pendingPrompt.value = ''
+      if (textareaEl.value) textareaEl.value.style.height = 'auto'
+    }
+
     await nextTick()
     scrollToBottom()
   } catch (err) {
     error.value = err.message
-    searchStatus.value = ''
   } finally {
     sending.value = false
   }
 }
 
-function useSuggestion(suggestion) {
+async function useSuggestion(suggestion) {
   const original = pendingPrompt.value
   clarification.value = null
-  // Conserve la question d'origine + la precision choisie
-  prompt.value = original + '\n\nPrécision : ' + suggestion
   pendingPrompt.value = ''
-  if (textareaEl.value) {
-    textareaEl.value.focus()
-    nextTick(autoResize)
+  sending.value = true
+  error.value = ''
+
+  await nextTick()
+  scrollToBottom()
+
+  try {
+    const result = await sendCompletion(props.conversationId, {
+      prompt: original,
+      modelId: modelStore.selectedModelId,
+      clarificationContext: suggestion
+    })
+
+    interactions.value.push(result)
+    prompt.value = ''
+    if (textareaEl.value) textareaEl.value.style.height = 'auto'
+
+    await nextTick()
+    scrollToBottom()
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    sending.value = false
   }
 }
 
@@ -329,12 +287,9 @@ function skipClarification() {
   const text = pendingPrompt.value
   clarification.value = null
   pendingPrompt.value = ''
-  doCompletion(text)
-}
-
-function dismissClarification() {
-  clarification.value = null
-  pendingPrompt.value = ''
+  // Re-send with the original prompt (backend will process again)
+  prompt.value = text
+  nextTick(() => sendPrompt())
 }
 
 function scrollToBottom() {
@@ -458,33 +413,6 @@ onMounted(() => {
   color: var(--text-light);
 }
 
-/* ══════════════════════════════════════
-   SEARCH STATUS
-   ══════════════════════════════════════ */
-.search-status {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 1rem 0;
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 0.72rem;
-  color: var(--accent);
-  letter-spacing: 0.04em;
-  animation: fadeInUp 0.3s ease;
-}
-
-.search-dot {
-  width: 6px; height: 6px;
-  border-radius: 50%;
-  background: var(--accent);
-  animation: pulse 1s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 0.3; transform: scale(0.8); }
-  50% { opacity: 1; transform: scale(1.2); }
-}
-
 @keyframes fadeInUp {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
@@ -538,6 +466,22 @@ onMounted(() => {
   padding: 0.2rem 0.6rem;
 }
 
+.pill-auto {
+  background: none;
+  border: 1px solid var(--accent-pop, #3DCAAD);
+  color: var(--accent-pop, #3DCAAD);
+  font-size: 0.55rem;
+  padding: 0.2rem 0.6rem;
+}
+
+.pill-clarification {
+  background: none;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-size: 0.55rem;
+  padding: 0.2rem 0.6rem;
+}
+
 .msg-meta {
   font-family: 'IBM Plex Mono', monospace;
   font-size: 0.62rem;
@@ -556,94 +500,28 @@ onMounted(() => {
 }
 
 /* ══════════════════════════════════════
-   SOURCES PANEL (Perplexity-style)
+   CITATION BADGES (inline in markdown)
    ══════════════════════════════════════ */
-.sources-panel {
-  padding: 1.25rem 0 0.5rem;
-  animation: fadeInUp 0.3s ease;
-}
-
-.sources-header {
-  display: flex;
+.md-content :deep(.citation-inline) {
+  display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.75rem;
-}
-
-.sources-icon {
-  font-size: 0.85rem;
-  color: var(--accent);
-}
-
-.sources-label {
-  font-size: 0.65rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-  color: var(--text-mid);
-}
-
-.sources-count {
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 0.55rem;
-  color: var(--text-light);
-  background: var(--border);
-  padding: 0.1rem 0.45rem;
-  border-radius: 50px;
-}
-
-.sources-list {
-  display: flex;
-  gap: 0.5rem;
-  overflow-x: auto;
-  padding-bottom: 0.25rem;
-  scrollbar-width: thin;
-  scrollbar-color: var(--border) transparent;
-}
-
-.source-card {
-  flex-shrink: 0;
-  width: 180px;
-  padding: 0.75rem;
-  border: 1px solid var(--border);
-  background: #FFF;
-  text-decoration: none;
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  transition: all 0.2s ease;
-}
-
-.source-card:hover {
-  border-color: var(--accent);
-  background: rgba(212, 164, 56, 0.03);
-}
-
-.source-citation {
+  justify-content: center;
   font-family: 'IBM Plex Mono', monospace;
   font-size: 0.6rem;
   font-weight: 600;
   color: var(--accent);
+  background: rgba(212, 164, 56, 0.08);
+  padding: 0.05rem 0.3rem;
+  text-decoration: none;
+  vertical-align: super;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
-.source-title {
-  font-size: 0.72rem;
-  font-weight: 500;
+.md-content :deep(.citation-inline:hover) {
+  background: rgba(212, 164, 56, 0.18);
   color: var(--text);
-  line-height: 1.3;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.source-url {
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 0.55rem;
-  color: var(--text-light);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /* ══════════════════════════════════════
@@ -706,14 +584,14 @@ onMounted(() => {
   margin: 1rem 0;
 }
 
-.md-content :deep(a) {
+.md-content :deep(a:not(.citation-inline)) {
   color: var(--accent);
   text-decoration: underline;
   text-underline-offset: 3px;
   transition: color 0.2s ease;
 }
 
-.md-content :deep(a:hover) { color: var(--accent-light); }
+.md-content :deep(a:not(.citation-inline):hover) { color: var(--accent-light); }
 
 .md-content :deep(hr) {
   border: none;
@@ -722,73 +600,23 @@ onMounted(() => {
 }
 
 /* ══════════════════════════════════════
-   CLARIFICATION CARD
+   CLARIFICATION (inline in chat)
    ══════════════════════════════════════ */
-.clarification-card {
-  flex-shrink: 0;
-  margin: 0 3rem;
-  padding: 1.25rem 1.5rem;
-  border: 1px solid var(--accent);
-  background: rgba(212, 164, 56, 0.04);
-  animation: fadeInUp 0.3s ease;
+.clarification-interaction {
+  border-left: 3px solid var(--accent);
+  padding-left: 1.25rem;
 }
 
-.clarification-header {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.75rem;
-}
-
-.clarification-icon {
-  font-size: 0.9rem;
-  color: var(--accent);
-}
-
-.clarification-title {
-  font-size: 0.7rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  color: var(--accent);
-  flex: 1;
-}
-
-.clarification-confidence {
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 0.55rem;
-  color: var(--text-light);
-  background: var(--border);
-  padding: 0.1rem 0.45rem;
-  border-radius: 50px;
-  margin-left: auto;
-}
-
-.clarification-dismiss {
-  background: none;
-  border: none;
-  color: var(--text-light);
-  font-size: 1.1rem;
-  cursor: pointer;
-  padding: 0 0.25rem;
-  line-height: 1;
-  transition: color 0.2s ease;
-}
-
-.clarification-dismiss:hover { color: var(--text); }
-
-.clarification-reason {
-  font-size: 0.85rem;
+.clarification-text {
   color: var(--text-mid);
   line-height: 1.6;
-  margin-bottom: 1rem;
 }
 
 .clarification-suggestions {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-  margin-bottom: 1rem;
+  margin-top: 1rem;
 }
 
 .suggestion-btn {
@@ -820,7 +648,7 @@ onMounted(() => {
   font-size: 0.62rem;
   letter-spacing: 0.04em;
   cursor: pointer;
-  padding: 0.35rem 0;
+  padding: 0.5rem 0 0;
   transition: color 0.2s ease;
 }
 
@@ -898,36 +726,6 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-}
-
-/* ── Action Toggles ── */
-.action-toggle {
-  padding: 0.4rem 0.75rem;
-  background: transparent;
-  border: 1px solid var(--border);
-  color: var(--text-light);
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 0.62rem;
-  font-weight: 500;
-  letter-spacing: 0.04em;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.action-toggle:hover {
-  border-color: var(--text-mid);
-  color: var(--text-mid);
-}
-
-.action-toggle.active {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: rgba(212, 164, 56, 0.06);
-}
-
-.action-toggle:disabled {
-  opacity: 0.3;
-  cursor: not-allowed;
 }
 
 .send-btn {
