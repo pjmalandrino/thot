@@ -19,16 +19,16 @@ public class DocumentService {
     private final DocumentRepository documentRepository;
     private final ConversationRepository conversationRepository;
     private final DocumentGateway documentGateway;
-
-    @Value("${document.max-content-length:8000}")
-    private int maxContentLength;
+    private final int maxContentLength;
 
     public DocumentService(DocumentRepository documentRepository,
                            ConversationRepository conversationRepository,
-                           DocumentGateway documentGateway) {
+                           DocumentGateway documentGateway,
+                           @Value("${document.max-content-length:8000}") int maxContentLength) {
         this.documentRepository = documentRepository;
         this.conversationRepository = conversationRepository;
         this.documentGateway = documentGateway;
+        this.maxContentLength = maxContentLength;
     }
 
     public Document upload(Long conversationId, MultipartFile file) {

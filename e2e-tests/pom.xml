@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.example</groupId>
+    <artifactId>thot-e2e-tests</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+    <name>THOT E2E Tests</name>
+    <description>Tests end-to-end avec Karate pour la stack THOT complete</description>
+
+    <properties>
+        <java.version>21</java.version>
+        <karate.version>1.5.0</karate.version>
+        <maven.compiler.source>${java.version}</maven.compiler.source>
+        <maven.compiler.target>${java.version}</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.karatelabs</groupId>
+            <artifactId>karate-junit5</artifactId>
+            <version>${karate.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <testResources>
+            <testResource>
+                <directory>src/test/resources</directory>
+            </testResource>
+        </testResources>
+        <plugins>
+            <!-- Bloque le build si Java < 21 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <version>3.4.1</version>
+                <executions>
+                    <execution>
+                        <id>enforce-java</id>
+                        <goals><goal>enforce</goal></goals>
+                        <configuration>
+                            <rules>
+                                <requireJavaVersion>
+                                    <version>[21,)</version>
+                                    <message>Java 21+ requis. Verifiez JAVA_HOME ou utilisez : export JAVA_HOME=$(/usr/libexec/java_home -v 21)</message>
+                                </requireJavaVersion>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <version>3.2.5</version>
+                <configuration>
+                    <includes>
+                        <include>**/*IT.java</include>
+                    </includes>
+                    <!-- Transmet les -D au runtime Karate -->
+                    <systemPropertyVariables>
+                        <baseUrl>${baseUrl}</baseUrl>
+                        <keycloakUrl>${keycloakUrl}</keycloakUrl>
+                        <testUsername>${testUsername}</testUsername>
+                        <testPassword>${testPassword}</testPassword>
+                        <testClientId>${testClientId}</testClientId>
+                    </systemPropertyVariables>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.12.1</version>
+                <configuration>
+                    <source>${java.version}</source>
+                    <target>${java.version}</target>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

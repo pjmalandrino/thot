@@ -1,0 +1,11 @@
+Document de test E2E pour THOT.
+
+Ce fichier est utilise dans les tests end-to-end pour verifier
+que le pipeline d'upload de documents fonctionne correctement.
+
+Contenu :
+- L'upload via l'API REST est teste
+- Le parsing par le document-parser Python est verifie
+- L'injection du contexte documentaire dans le system prompt est validee
+
+Fin du document de test.
