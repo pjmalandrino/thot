@@ -4,6 +4,7 @@ function fn() {
   // Defaut = env local standard (docker compose up depuis la racine)
   var config = {
     baseUrl: karate.properties['baseUrl'] || 'http://localhost:8081',
+    contextEngineUrl: karate.properties['contextEngineUrl'] || 'http://localhost:8082',
     keycloakUrl: karate.properties['keycloakUrl'] || 'http://localhost:8080',
     testUsername: karate.properties['testUsername'] || 'testuser',
     testPassword: karate.properties['testPassword'] || 'password',

@@ -1,0 +1,27 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        default_schema: context_engine
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.yaml
+    default-schema: context_engine
+
+context:
+  primary-model: test-model
+  min-confidence: 0.75
+  fallback-policy: continue
+  llm-provider: mistral
+
+mistral:
+  api-key: test-key
+
+tavily:
+  api-key: test-key

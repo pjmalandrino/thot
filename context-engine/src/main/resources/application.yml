@@ -1,0 +1,44 @@
+server:
+  port: 8082
+
+spring:
+  datasource:
+    url: jdbc:postgresql://postgres:5432/chatinterface?currentSchema=context_engine
+    username: app
+    password: app
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: false
+    properties:
+      hibernate:
+        default_schema: context_engine
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.yaml
+    default-schema: context_engine
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+
+context:
+  primary-model: mistral-small-latest
+  min-confidence: 0.75
+  fallback-policy: continue
+  llm-provider: ollama
+
+ollama:
+  base-url: http://host.docker.internal:11434
+
+mistral:
+  api-key: ${MISTRAL_API_KEY:}
+
+tavily:
+  api-key: ${TAVILY_API_KEY:}
+  max-results: 5
+  search-depth: basic
+  max-extract-urls: 3
+  max-content-length: 4000

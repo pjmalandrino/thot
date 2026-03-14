@@ -65,6 +65,7 @@
                     <!-- Transmet les -D au runtime Karate -->
                     <systemPropertyVariables>
                         <baseUrl>${baseUrl}</baseUrl>
+                        <contextEngineUrl>${contextEngineUrl}</contextEngineUrl>
                         <keycloakUrl>${keycloakUrl}</keycloakUrl>
                         <testUsername>${testUsername}</testUsername>
                         <testPassword>${testPassword}</testPassword>

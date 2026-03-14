@@ -39,6 +39,28 @@ services:
     ports:
       - "8000:8000"
 
+  context-engine:
+    build:
+      context: ./context-engine
+    ports:
+      - "8082:8082"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/chatinterface?currentSchema=context_engine
+      SPRING_DATASOURCE_USERNAME: app
+      SPRING_DATASOURCE_PASSWORD: app
+      CONTEXT_LLM_PROVIDER: mistral
+      MISTRAL_API_KEY: ${MISTRAL_API_KEY:-}
+      TAVILY_API_KEY: ${TAVILY_API_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8082/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
   backend:
     build:
       context: ./backend
@@ -51,10 +73,13 @@ services:
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/chat-app/protocol/openid-connect/certs
       APP_KEYCLOAK_ISSUER_URI: http://localhost:8080/realms/chat-app
       DOCUMENT_PARSER_BASE_URL: http://document-parser:8000
+      CONTEXT_ENGINE_BASE_URL: http://context-engine:8082
     depends_on:
       postgres:
         condition: service_healthy
       keycloak:
+        condition: service_healthy
+      context-engine:
         condition: service_healthy
 
   frontend:
