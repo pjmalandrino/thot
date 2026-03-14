@@ -1,0 +1,3 @@
+Ceci est un fichier de test pour les tests d'integration Karate.
+Il contient du texte simple qui sera parse par le document-parser.
+Ligne 3 du fichier test.
