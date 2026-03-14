@@ -1,5 +1,8 @@
 package com.example.chatinterface.conversation;
 
+import com.example.chatinterface.contextengine.ContextEngineClient;
+import com.example.chatinterface.contextengine.ContextEngineResponse;
+import com.example.chatinterface.contextengine.ContextEngineResponse.WebSearchResultDto;
 import com.example.chatinterface.document.DocumentRepository;
 import com.example.chatinterface.document.DocumentService;
 import com.example.chatinterface.llm.LlmGateway;
@@ -10,8 +13,6 @@ import com.example.chatinterface.llm.LlmProvider;
 import com.example.chatinterface.llm.LlmProviderType;
 import com.example.chatinterface.thotspace.Thotspace;
 import com.example.chatinterface.thotspace.ThotspaceRepository;
-import com.example.chatinterface.websearch.SearchResult;
-import com.example.chatinterface.websearch.WebSearchService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -31,7 +32,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -42,7 +42,7 @@ class ConversationServiceTest {
     @Mock private ConversationRepository conversationRepository;
     @Mock private LlmInteractionRepository interactionRepository;
     @Mock private ThotspaceRepository thotspaceRepository;
-    @Mock private WebSearchService webSearchService;
+    @Mock private ContextEngineClient contextEngineClient;
     @Mock private DocumentService documentService;
     @Mock private DocumentRepository documentRepository;
     @Mock private LlmGatewayFactory gatewayFactory;
@@ -76,6 +76,29 @@ class ConversationServiceTest {
         defaultModel.setModelName("llama3.2:3b");
         defaultModel.setDisplayName("Llama 3.2 3B");
         setId(defaultModel, 1L);
+    }
+
+    private ContextEngineResponse continueResponse() {
+        return ContextEngineResponse.failOpen();
+    }
+
+    private ContextEngineResponse clarificationResponse() {
+        ContextEngineResponse r = new ContextEngineResponse();
+        r.setStatus("clarification_needed");
+        r.setConfidence(0.9);
+        r.setClarificationMessage("Votre question manque de precision.");
+        r.setSuggestions(List.of("Question 1 ?", "Question 2 ?"));
+        return r;
+    }
+
+    private ContextEngineResponse webSearchResponse() {
+        ContextEngineResponse r = new ContextEngineResponse();
+        r.setStatus("continue");
+        r.setConfidence(1.0);
+        r.setWebSearchResults(List.of(
+                new WebSearchResultDto("[1]", "https://example.com", "Example", "Contenu extrait")));
+        r.setWebSearchContext("[1] Example — https://example.com\nContenu extrait");
+        return r;
     }
 
     // ── createConversation ───────────────────────────────────────────────
@@ -212,12 +235,13 @@ class ConversationServiceTest {
     class Complete {
 
         @Test
-        @DisplayName("genere une completion simple et sauvegarde l'interaction")
+        @DisplayName("genere une completion via context-engine et sauvegarde l'interaction")
         void completeNormal() {
             when(conversationRepository.findById(10L)).thenReturn(Optional.of(conversation));
             when(documentService.buildDocumentContext(10L)).thenReturn(null);
             when(interactionRepository.findByConversationIdOrderByCreatedAtAsc(10L))
                     .thenReturn(List.of());
+            when(contextEngineClient.analyze(any())).thenReturn(continueResponse());
             when(modelRepository.findById(1L)).thenReturn(Optional.of(defaultModel));
             when(gatewayFactory.getGateway(defaultProvider, "llama3.2:3b")).thenReturn(llmGateway);
             when(llmGateway.generate(any())).thenReturn("Reponse du LLM");
@@ -231,8 +255,8 @@ class ConversationServiceTest {
 
             assertThat(result.getPrompt()).isEqualTo("Bonjour");
             assertThat(result.getResponse()).isEqualTo("Reponse du LLM");
+            verify(contextEngineClient).analyze(any());
             verify(llmGateway).generate(any());
-            verify(interactionRepository).save(any(LlmInteraction.class));
         }
 
         @Test
@@ -242,6 +266,7 @@ class ConversationServiceTest {
             when(documentService.buildDocumentContext(10L)).thenReturn(null);
             when(interactionRepository.findByConversationIdOrderByCreatedAtAsc(10L))
                     .thenReturn(List.of());
+            when(contextEngineClient.analyze(any())).thenReturn(continueResponse());
             when(modelRepository.findFirstByEnabledTrue()).thenReturn(Optional.of(defaultModel));
             when(gatewayFactory.getGateway(defaultProvider, "llama3.2:3b")).thenReturn(llmGateway);
             when(llmGateway.generate(any())).thenReturn("Reponse");
@@ -264,6 +289,7 @@ class ConversationServiceTest {
             when(documentService.buildDocumentContext(10L)).thenReturn(null);
             when(interactionRepository.findByConversationIdOrderByCreatedAtAsc(10L))
                     .thenReturn(List.of());
+            when(contextEngineClient.analyze(any())).thenReturn(continueResponse());
             when(modelRepository.findFirstByEnabledTrue()).thenReturn(Optional.of(defaultModel));
             when(gatewayFactory.getGateway(any(), anyString())).thenReturn(llmGateway);
             when(llmGateway.generate(any())).thenReturn("OK");
@@ -287,6 +313,7 @@ class ConversationServiceTest {
             when(documentService.buildDocumentContext(10L)).thenReturn(null);
             when(interactionRepository.findByConversationIdOrderByCreatedAtAsc(10L))
                     .thenReturn(List.of());
+            when(contextEngineClient.analyze(any())).thenReturn(continueResponse());
             when(modelRepository.findFirstByEnabledTrue()).thenReturn(Optional.of(defaultModel));
             when(gatewayFactory.getGateway(any(), anyString())).thenReturn(llmGateway);
             when(llmGateway.generate(any())).thenReturn("OK");
@@ -309,15 +336,13 @@ class ConversationServiceTest {
     class CompleteWithWebSearch {
 
         @Test
-        @DisplayName("effectue une recherche web et injecte les sources dans le contexte")
+        @DisplayName("appelle le context-engine avec webSearch et injecte les sources")
         void searchAndInjectSources() {
-            SearchResult sr = new SearchResult("[1]", "https://example.com", "Example", "Contenu extrait");
             when(conversationRepository.findById(10L)).thenReturn(Optional.of(conversation));
-            when(webSearchService.searchAndExtract("question")).thenReturn(List.of(sr));
-            when(webSearchService.buildContextPrompt(any())).thenReturn("[1] Example — https://example.com\nContenu extrait");
             when(documentService.buildDocumentContext(10L)).thenReturn(null);
             when(interactionRepository.findByConversationIdOrderByCreatedAtAsc(10L))
                     .thenReturn(List.of());
+            when(contextEngineClient.analyze(any())).thenReturn(webSearchResponse());
             when(modelRepository.findFirstByEnabledTrue()).thenReturn(Optional.of(defaultModel));
             when(gatewayFactory.getGateway(any(), anyString())).thenReturn(llmGateway);
             when(llmGateway.generate(any())).thenReturn("Reponse avec sources [1]");
@@ -330,13 +355,40 @@ class ConversationServiceTest {
             LlmInteraction result = conversationService.completeWithWebSearch(10L, "question", null);
 
             assertThat(result.getResponse()).contains("sources [1]");
-            verify(webSearchService).searchAndExtract("question");
+            verify(contextEngineClient).analyze(any());
 
             ArgumentCaptor<LlmInteraction> captor = ArgumentCaptor.forClass(LlmInteraction.class);
             verify(interactionRepository).save(captor.capture());
             LlmInteraction saved = captor.getValue();
             assertThat(saved.getSources()).hasSize(1);
             assertThat(saved.getSources().get(0).getSourceUrl()).isEqualTo("https://example.com");
+        }
+    }
+
+    // ── clarification (context-engine interrupts) ────────────────────────
+
+    @Nested
+    @DisplayName("clarification")
+    class Clarification {
+
+        @Test
+        @DisplayName("retourne la clarification du context-engine sans appeler le LLM")
+        void returnsContextEngineClarification() {
+            when(conversationRepository.findById(10L)).thenReturn(Optional.of(conversation));
+            when(documentService.buildDocumentContext(10L)).thenReturn(null);
+            when(interactionRepository.findByConversationIdOrderByCreatedAtAsc(10L))
+                    .thenReturn(List.of());
+            when(contextEngineClient.analyze(any())).thenReturn(clarificationResponse());
+            when(interactionRepository.save(any(LlmInteraction.class))).thenAnswer(inv -> {
+                LlmInteraction i = inv.getArgument(0);
+                setId(i, 1L);
+                return i;
+            });
+
+            LlmInteraction result = conversationService.complete(10L, "Aide-moi", null);
+
+            assertThat(result.getResponse()).isEqualTo("Votre question manque de precision.");
+            verify(llmGateway, never()).generate(any());
         }
     }
 

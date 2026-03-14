@@ -1,5 +1,9 @@
 package com.example.chatinterface.conversation;
 
+import com.example.chatinterface.contextengine.ContextEngineClient;
+import com.example.chatinterface.contextengine.ContextEngineRequest;
+import com.example.chatinterface.contextengine.ContextEngineRequest.ConversationMessageDto;
+import com.example.chatinterface.contextengine.ContextEngineResponse;
 import com.example.chatinterface.document.DocumentRepository;
 import com.example.chatinterface.document.DocumentService;
 import com.example.chatinterface.llm.LlmGateway;
@@ -8,8 +12,6 @@ import com.example.chatinterface.llm.LlmModel;
 import com.example.chatinterface.llm.LlmModelRepository;
 import com.example.chatinterface.thotspace.Thotspace;
 import com.example.chatinterface.thotspace.ThotspaceRepository;
-import com.example.chatinterface.websearch.SearchResult;
-import com.example.chatinterface.websearch.WebSearchService;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
@@ -82,7 +84,7 @@ public class ConversationService {
     private final ConversationRepository conversationRepository;
     private final LlmInteractionRepository interactionRepository;
     private final ThotspaceRepository thotspaceRepository;
-    private final WebSearchService webSearchService;
+    private final ContextEngineClient contextEngineClient;
     private final DocumentService documentService;
     private final DocumentRepository documentRepository;
     private final LlmGatewayFactory gatewayFactory;
@@ -92,7 +94,7 @@ public class ConversationService {
             ConversationRepository conversationRepository,
             LlmInteractionRepository interactionRepository,
             ThotspaceRepository thotspaceRepository,
-            WebSearchService webSearchService,
+            ContextEngineClient contextEngineClient,
             DocumentService documentService,
             DocumentRepository documentRepository,
             LlmGatewayFactory gatewayFactory,
@@ -101,7 +103,7 @@ public class ConversationService {
         this.conversationRepository = conversationRepository;
         this.interactionRepository = interactionRepository;
         this.thotspaceRepository = thotspaceRepository;
-        this.webSearchService = webSearchService;
+        this.contextEngineClient = contextEngineClient;
         this.documentService = documentService;
         this.documentRepository = documentRepository;
         this.gatewayFactory = gatewayFactory;
@@ -149,57 +151,61 @@ public class ConversationService {
     }
 
     public LlmInteraction complete(Long conversationId, String prompt, Long modelId) {
-        Conversation conversation = conversationRepository.findById(conversationId)
-                .orElseThrow(() -> new RuntimeException("Conversation not found"));
-
-        String documentContext = documentService.buildDocumentContext(conversationId);
-        String systemPromptText = buildSystemPrompt(conversation.getThotspace(), documentContext, null);
-
-        ChatMemory memory = buildMemory(conversationId);
-        memory.add(SystemMessage.from(systemPromptText));
-        memory.add(UserMessage.from(prompt));
-
-        LlmGateway gateway = resolveGateway(modelId);
-        String response = gateway.generate(memory.messages());
-        LlmInteraction interaction = interactionRepository.save(
-                new LlmInteraction(conversation, prompt, response));
-
-        autoTitle(conversation, prompt);
-        return interaction;
+        return complete(conversationId, prompt, modelId, false);
     }
 
     public LlmInteraction completeWithWebSearch(Long conversationId, String prompt, Long modelId) {
+        return complete(conversationId, prompt, modelId, true);
+    }
+
+    private LlmInteraction complete(Long conversationId, String prompt, Long modelId, boolean webSearch) {
         Conversation conversation = conversationRepository.findById(conversationId)
                 .orElseThrow(() -> new RuntimeException("Conversation not found"));
 
-        // 1. Search + Extract
-        log.info("[WEB-SEARCH] Starting for conversation {} | query: {}", conversationId, prompt);
-        List<SearchResult> results = webSearchService.searchAndExtract(prompt);
-        log.info("[WEB-SEARCH] Got {} sources", results.size());
+        // 1. Call context-engine for pre-processing
+        ContextEngineRequest ceRequest = new ContextEngineRequest();
+        ceRequest.setPrompt(prompt);
+        ceRequest.setWebSearchRequested(webSearch);
+        ceRequest.setDocumentContext(documentService.buildDocumentContext(conversationId));
+        ceRequest.setConversationHistory(buildRecentHistory(conversationId));
 
-        String sourcesBlock = webSearchService.buildContextPrompt(results);
+        ContextEngineResponse ceResponse = contextEngineClient.analyze(ceRequest);
+
+        // 2. If clarification needed, return it directly
+        if (!ceResponse.isContinue()) {
+            LlmInteraction interaction = interactionRepository.save(
+                    new LlmInteraction(conversation, prompt, ceResponse.getClarificationMessage()));
+            return interaction;
+        }
+
+        // 3. Use the rewritten query if available
+        String effectivePrompt = ceResponse.getRewrittenQuery() != null
+                ? ceResponse.getRewrittenQuery()
+                : prompt;
+
+        // 4. Build system prompt with web search context if present
         String documentContext = documentService.buildDocumentContext(conversationId);
-        String systemPromptText = buildSystemPrompt(conversation.getThotspace(), documentContext, sourcesBlock);
+        String systemPromptText = buildSystemPrompt(
+                conversation.getThotspace(), documentContext, ceResponse.getWebSearchContext());
 
-        // 2. Build messages: system prompt + history + question
+        // 5. Build memory and generate
         ChatMemory memory = buildMemory(conversationId);
         memory.add(SystemMessage.from(systemPromptText));
-        memory.add(UserMessage.from(prompt));
+        memory.add(UserMessage.from(effectivePrompt));
 
-        log.info("[WEB-SEARCH] Sending {} messages to LLM", memory.messages().size());
-
-        // 3. Generate
         LlmGateway gateway = resolveGateway(modelId);
         String response = gateway.generate(memory.messages());
-        log.info("[WEB-SEARCH] LLM response received ({} chars)", response.length());
 
-        // 4. Persist with sources
-        List<SourceInfo> sourceInfos = results.stream()
-                .map(r -> new SourceInfo(r.getCitationId(), r.getSourceUrl(), r.getSourceTitle()))
-                .toList();
+        // 6. Persist with sources from web search
+        List<SourceInfo> sourceInfos = ceResponse.getWebSearchResults() != null
+                ? ceResponse.getWebSearchResults().stream()
+                    .map(r -> new SourceInfo(r.citationId(), r.sourceUrl(), r.sourceTitle()))
+                    .toList()
+                : List.of();
 
-        LlmInteraction interaction = interactionRepository.save(
-                new LlmInteraction(conversation, prompt, response, sourceInfos));
+        LlmInteraction interaction = sourceInfos.isEmpty()
+                ? interactionRepository.save(new LlmInteraction(conversation, prompt, response))
+                : interactionRepository.save(new LlmInteraction(conversation, prompt, response, sourceInfos));
 
         autoTitle(conversation, prompt);
         return interaction;
@@ -239,6 +245,17 @@ public class ConversationService {
     private LlmModel defaultModel() {
         return modelRepository.findFirstByEnabledTrue()
                 .orElseThrow(() -> new RuntimeException("No enabled LLM model available"));
+    }
+
+    private List<ConversationMessageDto> buildRecentHistory(Long conversationId) {
+        List<LlmInteraction> history = interactionRepository
+                .findByConversationIdOrderByCreatedAtAsc(conversationId);
+        int start = Math.max(0, history.size() - 5);
+        return history.subList(start, history.size()).stream()
+                .flatMap(i -> java.util.stream.Stream.of(
+                        new ConversationMessageDto("user", i.getPrompt()),
+                        new ConversationMessageDto("assistant", i.getResponse())))
+                .toList();
     }
 
     private ChatMemory buildMemory(Long conversationId) {

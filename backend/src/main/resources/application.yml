@@ -38,12 +38,8 @@ mistral:
   api-key: ${MISTRAL_API_KEY:}
   model: mistral-small-latest
 
-tavily:
-  api-key: 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
-  max-results: 5
-  search-depth: basic
-  max-extract-urls: 3
-  max-content-length: 4000
+context-engine:
+  base-url: http://context-engine:8082
 
 document-parser:
   base-url: http://localhost:8000

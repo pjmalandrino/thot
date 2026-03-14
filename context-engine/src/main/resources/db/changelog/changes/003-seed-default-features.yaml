@@ -1,0 +1,29 @@
+databaseChangeLog:
+  - changeSet:
+      id: 003-seed-default-features
+      author: developer
+      changes:
+        - insert:
+            schemaName: context_engine
+            tableName: context_features
+            columns:
+              - column: { name: feature_name, value: 'vagueness-detection' }
+              - column: { name: enabled, valueBoolean: true }
+              - column: { name: config_json, value: '{}' }
+              - column: { name: description, value: 'Detects vague prompts and suggests clarifications' }
+        - insert:
+            schemaName: context_engine
+            tableName: context_features
+            columns:
+              - column: { name: feature_name, value: 'query-rewriting' }
+              - column: { name: enabled, valueBoolean: true }
+              - column: { name: config_json, value: '{}' }
+              - column: { name: description, value: 'Rewrites user queries for better LLM processing and RAG' }
+        - insert:
+            schemaName: context_engine
+            tableName: context_features
+            columns:
+              - column: { name: feature_name, value: 'web-search' }
+              - column: { name: enabled, valueBoolean: true }
+              - column: { name: config_json, value: '{"maxResults": 5, "maxExtractUrls": 3}' }
+              - column: { name: description, value: 'Enriches context with web search results via Tavily' }

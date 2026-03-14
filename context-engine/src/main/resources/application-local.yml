@@ -1,0 +1,15 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/chatinterface?currentSchema=context_engine
+
+context:
+  llm-provider: mistral
+
+ollama:
+  base-url: http://localhost:11434
+
+mistral:
+  api-key: 5Lg5SQ8kolwnjxmJvU3YxiQwex3fpQzc
+
+tavily:
+  api-key: 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

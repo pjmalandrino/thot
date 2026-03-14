@@ -17,10 +17,5 @@ mistral:
   api-key: 5Lg5SQ8kolwnjxmJvU3YxiQwex3fpQzc
   model: mistral-small-latest
 
-tavily:
-  api-key: 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
-
-context:
-  primary-model: mistral-small-latest
-  min-confidence: 0.75
-  fallback-policy: continue
+context-engine:
+  base-url: http://localhost:8082

@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - include:
+      file: changes/001-create-schema.yaml
+      relativeToChangelogFile: true
+  - include:
+      file: changes/002-create-context-features-table.yaml
+      relativeToChangelogFile: true
+  - include:
+      file: changes/003-seed-default-features.yaml
+      relativeToChangelogFile: true
