@@ -57,13 +57,28 @@ public class ConversationService {
             ### Outil "chart" — Graphiques interactifs
             OBLIGATOIRE quand l'utilisateur demande un graphique, graph, chart, diagramme, ou visualisation :
             ```chart
-            {"data":[{"type":"bar","x":["Paris","Lyon","Marseille"],"y":[2161000,522969,873076]}],"layout":{"title":"Population des villes"}}
+            {"data":[{"type":"bar","name":"Population","x":["Paris","Lyon","Marseille"],"y":[2161000,522969,873076],"marker":{"color":"#D4A438"}}],"layout":{"title":"Population des villes","xaxis":{"title":"Ville"},"yaxis":{"title":"Habitants"}}}
             ```
-            - JSON Plotly valide avec "data" (liste de traces) et "layout" (avec au minimum un "title").
-            - Types : bar, scatter, line, pie, histogram, heatmap.
-            - Pour un pie : {"data":[{"type":"pie","labels":["A","B"],"values":[60,40]}],"layout":{"title":"Titre"}}
-            - UNE SEULE LIGNE de JSON valide.
-            - NE genere PAS de Python, matplotlib ou code executable.
+            - JSON Plotly valide avec "data" (liste de traces) et "layout" (avec "title" et titres d'axes).
+            - IMPORTANT : chaque trace DOIT avoir un "name" descriptif (jamais "trace 0" ou "trace 1").
+            - UNE SEULE LIGNE de JSON valide. NE genere PAS de Python, matplotlib ou code executable.
+
+            #### Choix du type de graphique
+            Adapte le type au contexte des donnees :
+            - "bar" : comparer des categories (ex: scores, populations, parts de marche). Pour comparer 2+ series, utilise plusieurs traces avec des "name" explicites.
+            - "scatter" ou "line" : evolution temporelle, tendances, correlations entre variables. Utilise "mode":"lines+markers" pour les lignes.
+            - "pie" : repartition / proportions d'un tout. Utilise {"type":"pie","labels":[...],"values":[...],"hole":0.35} pour un donut.
+            - "histogram" : distribution de valeurs numeriques.
+            - "heatmap" : matrices de correlation, intensite croisee.
+
+            #### Palette de couleurs THOT
+            Utilise ces couleurs dans tes traces via "marker":{"color":"..."} ou "line":{"color":"..."} :
+            #D4A438 (ambre), #3DCAAD (teal), #8B5CF6 (violet), #E85D4A (corail), #6366F1 (indigo), #10B981 (emeraude).
+
+            #### Exemples par type
+            - Ligne : {"data":[{"type":"scatter","mode":"lines+markers","name":"Ventes 2024","x":["Jan","Fev","Mar"],"y":[100,150,130],"line":{"color":"#D4A438"}}],"layout":{"title":"Evolution des ventes"}}
+            - Pie : {"data":[{"type":"pie","labels":["React","Vue","Angular"],"values":[60,25,15],"hole":0.35}],"layout":{"title":"Parts de marche"}}
+            - Multi-series : {"data":[{"type":"bar","name":"2023","x":["Q1","Q2"],"y":[10,20],"marker":{"color":"#D4A438"}},{"type":"bar","name":"2024","x":["Q1","Q2"],"y":[15,25],"marker":{"color":"#3DCAAD"}}],"layout":{"title":"Comparaison","barmode":"group"}}
 
             ### Regles communes
             - Tu peux combiner les deux outils dans une meme reponse (ex: un graphique + un tableau des donnees).

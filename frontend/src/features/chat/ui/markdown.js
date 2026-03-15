@@ -27,7 +27,7 @@ function renderTableFromSpec(json) {
     return `<tr>${tds}</tr>`
   }).join('')
 
-  return `<table><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table>`
+  return `<div class="table-wrapper"><table><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table></div>`
 }
 
 // ── Chart tool: JSON → placeholder div (rendered async by useChartRenderer) ─
