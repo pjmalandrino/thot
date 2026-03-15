@@ -1,0 +1,19 @@
+databaseChangeLog:
+  - changeSet:
+      id: 011-add-mode-thinking-to-interactions
+      author: developer
+      changes:
+        - addColumn:
+            tableName: llm_interactions
+            columns:
+              - column:
+                  name: mode
+                  type: VARCHAR(20)
+                  defaultValue: 'standard'
+                  constraints:
+                    nullable: false
+              - column:
+                  name: thinking
+                  type: TEXT
+                  constraints:
+                    nullable: true

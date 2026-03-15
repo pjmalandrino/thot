@@ -1,0 +1,35 @@
+databaseChangeLog:
+  - changeSet:
+      id: 012-seed-magistral-models
+      author: developer
+      changes:
+        - insert:
+            tableName: llm_models
+            columns:
+              - column:
+                  name: provider_id
+                  valueComputed: (SELECT id FROM llm_providers WHERE name = 'Mistral')
+              - column:
+                  name: model_name
+                  value: magistral-small-latest
+              - column:
+                  name: display_name
+                  value: Magistral Small
+              - column:
+                  name: enabled
+                  valueBoolean: true
+        - insert:
+            tableName: llm_models
+            columns:
+              - column:
+                  name: provider_id
+                  valueComputed: (SELECT id FROM llm_providers WHERE name = 'Mistral')
+              - column:
+                  name: model_name
+                  value: magistral-medium-latest
+              - column:
+                  name: display_name
+                  value: Magistral Medium
+              - column:
+                  name: enabled
+                  valueBoolean: true

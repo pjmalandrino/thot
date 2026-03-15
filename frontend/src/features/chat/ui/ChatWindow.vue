@@ -7,7 +7,7 @@
         <span class="header-label">Session</span>
         <span class="header-id">#{{ conversationId }}</span>
       </div>
-      <ModelSelect :disabled="sending" />
+      <ModelSelect :disabled="isBusy" />
     </div>
 
     <div class="messages" ref="messagesEl">
@@ -19,7 +19,7 @@
         <span>{{ error }}</span>
       </div>
       <template v-else>
-        <div v-if="interactions.length === 0 && !clarification" class="empty-chat">
+        <div v-if="interactions.length === 0 && !clarification && !stream.streaming.value" class="empty-chat">
           <span class="empty-hero">?</span>
           <span class="empty-text">En attente d'une instruction</span>
         </div>
@@ -35,16 +35,24 @@
           <div class="msg msg-llm">
             <div class="msg-head">
               <span class="pill pill-llm">Thot</span>
+              <span v-if="item.mode === 'think'" class="pill pill-think">Think</span>
+              <span v-if="item.mode === 'research'" class="pill pill-research">Research</span>
               <span v-if="item.sources && item.sources.length" class="pill pill-web">Web</span>
               <span v-if="item.autoWebSearchTriggered" class="pill pill-auto">Auto</span>
               <span class="msg-meta">{{ formatDateTime(item.createdAt) }}</span>
             </div>
+            <!-- Historical thinking block (collapsed) -->
+            <ThinkingBlock
+              v-if="item.thinking"
+              :content="item.thinking"
+              :start-collapsed="true"
+            />
             <div class="msg-text llm-text md-content" v-html="renderMarkdown(item.response, item.sources)"></div>
             <SourcesFooter :sources="item.sources" />
           </div>
         </div>
 
-        <!-- Inline clarification (in the chat flow, not as external card) -->
+        <!-- Inline clarification -->
         <div v-if="clarification" class="interaction clarification-interaction">
           <div class="msg msg-user">
             <div class="msg-head">
@@ -69,10 +77,52 @@
             <button class="skip-btn" @click="skipClarification">Envoyer quand meme</button>
           </div>
         </div>
+
+        <!-- ═══ Live streaming interaction ═══ -->
+        <div v-if="stream.streaming.value" class="interaction streaming-interaction">
+          <div class="msg msg-user">
+            <div class="msg-head">
+              <span class="pill pill-user">Vous</span>
+            </div>
+            <p class="msg-text user-text">{{ streamingPrompt }}</p>
+          </div>
+
+          <div class="msg msg-llm">
+            <div class="msg-head">
+              <span class="pill pill-llm">Thot</span>
+              <span v-if="selectedMode === 'think'" class="pill pill-think">Think</span>
+              <span v-if="selectedMode === 'research'" class="pill pill-research">Research</span>
+            </div>
+
+            <!-- Research mode: live pipeline steps -->
+            <ThinkingIndicator
+              v-if="selectedMode === 'research'"
+              :visible="true"
+              :sse-steps="stream.steps.value"
+            />
+
+            <!-- Think mode: live thinking block -->
+            <ThinkingBlock
+              v-if="selectedMode === 'think' && stream.thinking.value"
+              :content="stream.thinking.value"
+              :is-streaming="true"
+            />
+
+            <!-- Live answer rendering -->
+            <div
+              v-if="stream.answer.value"
+              class="msg-text llm-text md-content"
+              v-html="renderMarkdown(stream.answer.value, stream.sources.value)"
+            ></div>
+
+            <!-- Live sources -->
+            <SourcesFooter v-if="stream.sources.value.length" :sources="stream.sources.value" />
+          </div>
+        </div>
       </template>
 
-      <!-- Thinking indicator (replaces old search-status) -->
-      <ThinkingIndicator :visible="sending" />
+      <!-- Standard mode: fake thinking indicator -->
+      <ThinkingIndicator :visible="sending && selectedMode === 'standard'" />
     </div>
 
     <div class="input-area">
@@ -88,19 +138,19 @@
           <button
             class="doc-chip-remove"
             @click="documentStore.remove(conversationId, doc.id)"
-            :disabled="sending"
+            :disabled="isBusy"
             title="Retirer"
           >&times;</button>
         </div>
       </div>
 
-      <div class="input-box" :class="{ focused: inputFocused, generating: sending }">
+      <div class="input-box" :class="{ focused: inputFocused, generating: isBusy }">
         <textarea
           ref="textareaEl"
           v-model="prompt"
           class="input-field"
           placeholder="Posez votre question..."
-          :disabled="sending"
+          :disabled="isBusy"
           rows="1"
           @keydown.enter.exact="sendPrompt"
           @input="autoResize"
@@ -108,18 +158,31 @@
           @blur="inputFocused = false"
         ></textarea>
         <div class="input-bottom">
-          <div class="input-hints">
-            <kbd>&#9166;</kbd> envoyer
-            <span class="dot">&middot;</span>
-            <kbd>&#8679;&#9166;</kbd> ligne
+          <div class="input-left">
+            <!-- Mode toggle -->
+            <div class="mode-toggle">
+              <button
+                v-for="m in modes"
+                :key="m.id"
+                class="mode-btn"
+                :class="{ active: selectedMode === m.id }"
+                :disabled="isBusy"
+                @click="selectedMode = m.id"
+              >{{ m.label }}</button>
+            </div>
+            <div class="input-hints">
+              <kbd>&#9166;</kbd> envoyer
+              <span class="dot">&middot;</span>
+              <kbd>&#8679;&#9166;</kbd> ligne
+            </div>
           </div>
           <div class="input-actions">
             <DocumentAttachment
               :conversation-id="conversationId"
-              :disabled="sending"
+              :disabled="isBusy"
             />
-            <button class="send-btn" :disabled="!prompt.trim() || sending" @click="sendPrompt">
-              <span v-if="sending" class="send-loader"></span>
+            <button class="send-btn" :disabled="!prompt.trim() || isBusy" @click="sendPrompt">
+              <span v-if="isBusy" class="send-loader"></span>
               <span v-else>Envoyer</span>
             </button>
           </div>
@@ -130,10 +193,11 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { formatDateTime } from '../../../shared/utils/date.js'
 import { renderMarkdown } from './markdown.js'
 import { useChartRenderer } from './useChartRenderer.js'
+import { useStreamingCompletion } from './useStreamingCompletion.js'
 import { useModelStore } from '../../llm-model/store.js'
 import { useThotspaceStore } from '../../thotspace/store.js'
 import { useDocumentStore } from '../../document/store.js'
@@ -141,6 +205,7 @@ import { fetchCompletions, sendCompletion } from '../api.js'
 import ModelSelect from '../../llm-model/ui/ModelSelect.vue'
 import DocumentAttachment from '../../document/ui/DocumentAttachment.vue'
 import ThinkingIndicator from './ThinkingIndicator.vue'
+import ThinkingBlock from './ThinkingBlock.vue'
 import SourcesFooter from './SourcesFooter.vue'
 
 const props = defineProps({ conversationId: { type: Number, required: true } })
@@ -148,6 +213,7 @@ const props = defineProps({ conversationId: { type: Number, required: true } })
 const modelStore = useModelStore()
 const thotspaceStore = useThotspaceStore()
 const documentStore = useDocumentStore()
+const stream = useStreamingCompletion()
 const activeSpaceName = computed(() => thotspaceStore.activeSpace?.name)
 
 const interactions = ref([])
@@ -160,9 +226,62 @@ const textareaEl = ref(null)
 const inputFocused = ref(false)
 const clarification = ref(null)
 const pendingPrompt = ref('')
+const selectedMode = ref('standard')
+const streamingPrompt = ref('')
+
+const modes = [
+  { id: 'standard', label: 'Standard' },
+  { id: 'think', label: 'Think' },
+  { id: 'research', label: 'Research' }
+]
+
+const isBusy = computed(() => sending.value || stream.streaming.value)
 
 // Chart rendering: scans messages for chart placeholders and mounts Plotly.js
 useChartRenderer(messagesEl, interactions)
+
+// Auto-scroll during streaming
+watch(() => stream.answer.value, () => {
+  nextTick(() => scrollToBottom())
+})
+watch(() => stream.thinking.value, () => {
+  nextTick(() => scrollToBottom())
+})
+watch(() => stream.steps.value.length, () => {
+  nextTick(() => scrollToBottom())
+})
+
+// Handle stream completion
+watch(() => stream.doneData.value, async (data) => {
+  if (!data) return
+
+  if (data.clarification) {
+    // Stream returned a clarification
+    clarification.value = {
+      prompt: streamingPrompt.value,
+      clarificationMessage: data.message,
+      suggestions: data.suggestions
+    }
+    pendingPrompt.value = streamingPrompt.value
+  } else {
+    // Push completed interaction to history
+    interactions.value.push({
+      prompt: streamingPrompt.value,
+      response: data.response || stream.answer.value,
+      thinking: data.thinking || (stream.thinking.value || null),
+      sources: data.sources || stream.sources.value,
+      mode: selectedMode.value,
+      createdAt: new Date().toISOString()
+    })
+    prompt.value = ''
+    if (textareaEl.value) textareaEl.value.style.height = 'auto'
+  }
+
+  streamingPrompt.value = ''
+  stream.reset()
+  await nextTick()
+  scrollToBottom()
+})
 
 function formatCharCount(charCount) {
   if (charCount < 1000) return charCount + ' car.'
@@ -191,39 +310,55 @@ function autoResize() {
 
 async function sendPrompt(e) {
   if (e) e.preventDefault()
-  if (!prompt.value.trim() || sending.value) return
+  if (!prompt.value.trim() || isBusy.value) return
 
   const currentPrompt = prompt.value.trim()
   clarification.value = null
-  sending.value = true
   error.value = ''
 
-  await nextTick()
-  scrollToBottom()
+  if (selectedMode.value === 'standard') {
+    // Standard mode: existing synchronous flow
+    sending.value = true
+    await nextTick()
+    scrollToBottom()
 
-  try {
-    const result = await sendCompletion(props.conversationId, {
-      prompt: currentPrompt,
-      modelId: modelStore.selectedModelId
-    })
+    try {
+      const result = await sendCompletion(props.conversationId, {
+        prompt: currentPrompt,
+        modelId: modelStore.selectedModelId
+      })
 
-    // Handle clarification from context-engine
-    if (result.status === 'clarification_needed') {
-      clarification.value = result
-      pendingPrompt.value = currentPrompt
-    } else {
-      interactions.value.push(result)
-      prompt.value = ''
-      pendingPrompt.value = ''
-      if (textareaEl.value) textareaEl.value.style.height = 'auto'
+      if (result.status === 'clarification_needed') {
+        clarification.value = result
+        pendingPrompt.value = currentPrompt
+      } else {
+        interactions.value.push(result)
+        prompt.value = ''
+        pendingPrompt.value = ''
+        if (textareaEl.value) textareaEl.value.style.height = 'auto'
+      }
+
+      await nextTick()
+      scrollToBottom()
+    } catch (err) {
+      error.value = err.message
+    } finally {
+      sending.value = false
     }
+  } else {
+    // Think or Research mode: SSE streaming
+    streamingPrompt.value = currentPrompt
+    prompt.value = ''
+    if (textareaEl.value) textareaEl.value.style.height = 'auto'
 
     await nextTick()
     scrollToBottom()
-  } catch (err) {
-    error.value = err.message
-  } finally {
-    sending.value = false
+
+    stream.streamCompletion(props.conversationId, {
+      prompt: currentPrompt,
+      modelId: modelStore.selectedModelId,
+      mode: selectedMode.value
+    })
   }
 }
 
@@ -261,7 +396,6 @@ function skipClarification() {
   const text = pendingPrompt.value
   clarification.value = null
   pendingPrompt.value = ''
-  // Re-send with the original prompt (backend will process again)
   prompt.value = text
   nextTick(() => sendPrompt())
 }
@@ -404,6 +538,11 @@ onMounted(() => {
 
 .interaction:last-child { border-bottom: none; margin-bottom: 0; }
 
+.streaming-interaction {
+  border-left: 3px solid var(--accent);
+  padding-left: 1.25rem;
+}
+
 .msg { padding: 1.25rem 0; }
 
 .msg-head {
@@ -441,6 +580,22 @@ onMounted(() => {
 }
 
 .pill-auto {
+  background: none;
+  border: 1px solid var(--accent-pop, #3DCAAD);
+  color: var(--accent-pop, #3DCAAD);
+  font-size: 0.55rem;
+  padding: 0.2rem 0.6rem;
+}
+
+.pill-think {
+  background: none;
+  border: 1px solid #8B5CF6;
+  color: #8B5CF6;
+  font-size: 0.55rem;
+  padding: 0.2rem 0.6rem;
+}
+
+.pill-research {
   background: none;
   border: 1px solid var(--accent-pop, #3DCAAD);
   color: var(--accent-pop, #3DCAAD);
@@ -636,7 +791,6 @@ onMounted(() => {
   padding-top: 0.75rem;
 }
 
-/* Première colonne en accent subtil (souvent un rang / ID) */
 .md-content :deep(tbody td:first-child) {
   font-family: 'IBM Plex Mono', monospace;
   font-weight: 500;
@@ -787,6 +941,54 @@ onMounted(() => {
   justify-content: space-between;
   padding: 0.5rem 0.65rem 0.65rem 1.25rem;
   border-top: 1px solid var(--border);
+}
+
+.input-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+/* ══════════════════════════════════════
+   MODE TOGGLE
+   ══════════════════════════════════════ */
+.mode-toggle {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--border);
+}
+
+.mode-btn {
+  padding: 0.25rem 0.65rem;
+  background: none;
+  border: none;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.55rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-light);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.mode-btn:not(:last-child) {
+  border-right: 1px solid var(--border);
+}
+
+.mode-btn.active {
+  background: var(--dark);
+  color: var(--bg);
+}
+
+.mode-btn:hover:not(.active):not(:disabled) {
+  color: var(--text);
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.mode-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
 }
 
 .input-hints {

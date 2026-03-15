@@ -309,6 +309,35 @@ public class ConversationService {
         conversationRepository.deleteById(conversationId);
     }
 
+    // ── Streaming persistence ─────────────────────────────────────────────────
+
+    /**
+     * Persists the result of a streaming completion (Think or Research mode).
+     * Called after the SSE stream completes with the accumulated data.
+     */
+    @Transactional
+    public CompletionResponse persistStreamResult(Long conversationId, String prompt,
+                                                   String mode, String response,
+                                                   String thinking, List<SourceInfo> sources) {
+        Conversation conversation = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new RuntimeException("Conversation not found"));
+
+        LlmInteraction interaction = interactionRepository.save(
+                new LlmInteraction(conversation, prompt, response, mode, thinking,
+                        sources != null ? sources : List.of()));
+
+        autoTitle(conversation, prompt);
+
+        return CompletionResponse.from(interaction);
+    }
+
+    /**
+     * Builds document context for a conversation (exposed for streaming controller).
+     */
+    public String getDocumentContext(Long conversationId) {
+        return documentService.buildDocumentContext(conversationId);
+    }
+
     // ── Private helpers ───────────────────────────────────────────────────────
 
     private String buildSystemPrompt(Thotspace space, String documentContext, String webSearchContext) {

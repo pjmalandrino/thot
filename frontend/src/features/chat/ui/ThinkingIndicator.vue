@@ -1,43 +1,68 @@
 <template>
   <div class="thinking" v-if="visible">
     <div
-      v-for="(step, idx) in steps"
-      :key="step.id"
+      v-for="step in displaySteps"
+      :key="step.stepId"
       class="thinking-step"
-      :class="{ active: idx === currentStep, done: idx < currentStep, pending: idx > currentStep }"
+      :class="{
+        active: step.status === 'running',
+        done: step.status === 'done',
+        skipped: step.status === 'skipped',
+        pending: step.status === 'pending'
+      }"
     >
-      <span class="thinking-check" v-if="idx < currentStep">&#10003;</span>
-      <span class="thinking-dot" v-else-if="idx === currentStep"></span>
+      <span class="thinking-check" v-if="step.status === 'done'">&#10003;</span>
+      <span class="thinking-skip" v-else-if="step.status === 'skipped'">&#8212;</span>
+      <span class="thinking-dot" v-else-if="step.status === 'running'"></span>
       <span class="thinking-blank" v-else></span>
       <span class="thinking-label">{{ step.label }}</span>
+      <span v-if="step.detail && step.status === 'done'" class="thinking-detail">{{ step.detail }}</span>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 
 const props = defineProps({
-  visible: { type: Boolean, default: false }
+  visible: { type: Boolean, default: false },
+  // SSE-driven steps: [{stepId, status, label, detail}]
+  // When provided, replaces the fake animation
+  sseSteps: { type: Array, default: null }
 })
 
-const steps = [
-  { id: 'vagueness', label: 'Analyse de votre question...' },
-  { id: 'rewriting', label: 'Reformulation pour plus de precision...' },
-  { id: 'websearch', label: 'Recherche de sources...' },
-  { id: 'relevance', label: 'Verification de la pertinence...' },
-  { id: 'budget', label: 'Optimisation du contexte...' }
+// Fallback fake steps for Standard mode (no SSE)
+const fakeSteps = [
+  { stepId: 'vagueness', label: 'Analyse de votre question...', status: 'pending' },
+  { stepId: 'rewriting', label: 'Reformulation pour plus de precision...', status: 'pending' },
+  { stepId: 'websearch', label: 'Recherche de sources...', status: 'pending' },
+  { stepId: 'relevance', label: 'Verification de la pertinence...', status: 'pending' },
+  { stepId: 'budget', label: 'Optimisation du contexte...', status: 'pending' }
 ]
 
-const currentStep = ref(0)
+const currentFakeStep = ref(0)
 let timer = null
 
+const isSSEMode = computed(() => props.sseSteps !== null)
+
+const displaySteps = computed(() => {
+  if (isSSEMode.value) {
+    return props.sseSteps
+  }
+  // Fake animation mode
+  return fakeSteps.map((step, idx) => ({
+    ...step,
+    status: idx < currentFakeStep.value ? 'done' : idx === currentFakeStep.value ? 'running' : 'pending'
+  }))
+})
+
 function startAnimation() {
-  currentStep.value = 0
+  if (isSSEMode.value) return
+  currentFakeStep.value = 0
   clearInterval(timer)
   timer = setInterval(() => {
-    if (currentStep.value < steps.length) {
-      currentStep.value++
+    if (currentFakeStep.value < fakeSteps.length) {
+      currentFakeStep.value++
     } else {
       clearInterval(timer)
     }
@@ -50,12 +75,12 @@ function stopAnimation() {
 }
 
 watch(() => props.visible, (val) => {
-  if (val) startAnimation()
-  else stopAnimation()
+  if (val && !isSSEMode.value) startAnimation()
+  else if (!val) stopAnimation()
 })
 
 onMounted(() => {
-  if (props.visible) startAnimation()
+  if (props.visible && !isSSEMode.value) startAnimation()
 })
 
 onUnmounted(() => {
@@ -91,6 +116,12 @@ onUnmounted(() => {
   color: var(--accent, #D4A438);
 }
 
+.thinking-step.skipped {
+  color: var(--text-light);
+  opacity: 0.4;
+  text-decoration: line-through;
+}
+
 .thinking-step.pending {
   color: var(--text-light);
   opacity: 0.3;
@@ -101,6 +132,13 @@ onUnmounted(() => {
   text-align: center;
   font-size: 0.65rem;
   color: var(--accent-pop, #3DCAAD);
+}
+
+.thinking-skip {
+  width: 14px;
+  text-align: center;
+  font-size: 0.65rem;
+  color: var(--text-light);
 }
 
 .thinking-dot {
@@ -119,6 +157,13 @@ onUnmounted(() => {
 
 .thinking-label {
   line-height: 1.4;
+}
+
+.thinking-detail {
+  margin-left: auto;
+  font-size: 0.6rem;
+  color: var(--text-light);
+  opacity: 0.7;
 }
 
 @keyframes pulse {
