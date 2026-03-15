@@ -38,11 +38,13 @@ public class ContextAnalysisService implements AnalyzeContextUseCase {
     public ContextAnalysis analyze(String prompt,
                                    List<ConversationMessage> conversationHistory,
                                    String documentContext,
+                                   String driveDocumentContext,
                                    boolean webSearchRequested) {
-        log.info("[CONTEXT-ENGINE] Analyze request: prompt='{}', webSearch={}", prompt, webSearchRequested);
+        log.info("[CONTEXT-ENGINE] Analyze request: prompt='{}', webSearch={}, hasDriveContext={}",
+                prompt, webSearchRequested, driveDocumentContext != null);
 
         PipelineContext context = new PipelineContext(
-                prompt, conversationHistory, documentContext,
+                prompt, conversationHistory, documentContext, driveDocumentContext,
                 webSearchRequested, llmPort, webSearchPort, maxContextTokens);
 
         ContextAnalysis result = pipeline.run(context);

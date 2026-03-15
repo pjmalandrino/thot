@@ -46,3 +46,13 @@ document-parser:
 
 document:
   max-content-length: 8000
+
+google:
+  drive:
+    client-id: ${GOOGLE_CLIENT_ID:}
+    client-secret: ${GOOGLE_CLIENT_SECRET:}
+    redirect-uri: http://localhost:8081/api/drive/callback
+    frontend-redirect-uri: http://localhost:3000
+    max-search-results: 10
+    max-extract-files: 3
+    max-content-length: 4000

@@ -25,6 +25,7 @@ public class ContextAnalyzeController {
                 request.getPrompt(),
                 request.toDomainHistory(),
                 request.getDocumentContext(),
+                request.getDriveDocumentContext(),
                 request.isWebSearchRequested());
         return ContextResponseDto.from(result);
     }

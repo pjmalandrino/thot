@@ -45,7 +45,8 @@ public class ConversationController {
     @PostMapping("/{id}/completions")
     @ResponseStatus(HttpStatus.CREATED)
     public CompletionResponse complete(@PathVariable Long id, @RequestBody CompletionRequest request) {
-        return conversationService.complete(id, request.getPrompt(), request.getModelId(), request.getClarificationContext());
+        return conversationService.complete(id, request.getPrompt(), request.getModelId(),
+                request.getClarificationContext(), request.isDriveSearchEnabled());
     }
 
     @PatchMapping("/{id}")

@@ -12,12 +12,14 @@ public class ContextAnalysis {
     private final String rewrittenQuery;
     private final List<SearchResult> webSearchResults;
     private final String webSearchContext;
+    private final String driveDocumentContext;
     private final boolean autoWebSearchTriggered;
     private final Map<String, Integer> tokenUsage;
 
     private ContextAnalysis(String status, Double confidence, String clarificationMessage,
                             List<String> suggestions, String rewrittenQuery,
                             List<SearchResult> webSearchResults, String webSearchContext,
+                            String driveDocumentContext,
                             boolean autoWebSearchTriggered, Map<String, Integer> tokenUsage) {
         this.status = status;
         this.confidence = confidence;
@@ -26,6 +28,7 @@ public class ContextAnalysis {
         this.rewrittenQuery = rewrittenQuery;
         this.webSearchResults = webSearchResults;
         this.webSearchContext = webSearchContext;
+        this.driveDocumentContext = driveDocumentContext;
         this.autoWebSearchTriggered = autoWebSearchTriggered;
         this.tokenUsage = tokenUsage;
     }
@@ -33,16 +36,17 @@ public class ContextAnalysis {
     public static ContextAnalysis continueWith(String rewrittenQuery,
                                                 List<SearchResult> webSearchResults,
                                                 String webSearchContext,
+                                                String driveDocumentContext,
                                                 boolean autoWebSearchTriggered,
                                                 Map<String, Integer> tokenUsage) {
         return new ContextAnalysis("continue", 1.0, null, null,
                 rewrittenQuery, webSearchResults, webSearchContext,
-                autoWebSearchTriggered, tokenUsage);
+                driveDocumentContext, autoWebSearchTriggered, tokenUsage);
     }
 
     public static ContextAnalysis clarificationNeeded(String message, List<String> suggestions, double confidence) {
         return new ContextAnalysis("clarification_needed", confidence, message, suggestions,
-                null, List.of(), null, false, Map.of());
+                null, List.of(), null, null, false, Map.of());
     }
 
     public String getStatus() { return status; }
@@ -52,6 +56,7 @@ public class ContextAnalysis {
     public String getRewrittenQuery() { return rewrittenQuery; }
     public List<SearchResult> getWebSearchResults() { return webSearchResults; }
     public String getWebSearchContext() { return webSearchContext; }
+    public String getDriveDocumentContext() { return driveDocumentContext; }
     public boolean isAutoWebSearchTriggered() { return autoWebSearchTriggered; }
     public Map<String, Integer> getTokenUsage() { return tokenUsage; }
 

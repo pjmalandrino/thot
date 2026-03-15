@@ -88,6 +88,45 @@ public class ExternalDocumentGateway implements DocumentGateway {
         }
     }
 
+    @Override
+    public DocumentParseResult parse(byte[] content, String filename) {
+        log.info("[DOC-PARSE] Sending '{}' ({} bytes) to parser", filename, content.length);
+        try {
+            RequestBody multipart = new MultipartBody.Builder()
+                    .setType(MultipartBody.FORM)
+                    .addFormDataPart("file", filename, RequestBody.create(content, OCTET_STREAM))
+                    .build();
+
+            Request request = new Request.Builder()
+                    .url(baseUrl + "/parse")
+                    .post(multipart)
+                    .build();
+
+            try (Response response = httpClient.newCall(request).execute()) {
+                if (!response.isSuccessful()) {
+                    String errorBody = response.body() != null ? response.body().string() : "no body";
+                    throw new RuntimeException("Parser returned " + response.code() + ": " + errorBody);
+                }
+                String responseBody = response.body().string();
+                ExternalParseResponse parsed = objectMapper.readValue(responseBody, ExternalParseResponse.class);
+
+                log.info("[DOC-PARSE] Parsed '{}' — {} chars, {} pages",
+                        parsed.filename, parsed.charCount, parsed.pageCount);
+
+                return new DocumentParseResult(
+                        parsed.filename,
+                        parsed.contentType,
+                        parsed.pageCount,
+                        parsed.charCount,
+                        parsed.extractedText
+                );
+            }
+        } catch (IOException e) {
+            log.error("[DOC-PARSE] Failed to parse document: {}", filename, e);
+            throw new RuntimeException("Document parsing failed: " + e.getMessage(), e);
+        }
+    }
+
     @JsonIgnoreProperties(ignoreUnknown = true)
     static class ExternalParseResponse {
         @JsonProperty("filename")

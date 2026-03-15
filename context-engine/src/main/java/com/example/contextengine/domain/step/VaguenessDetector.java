@@ -145,12 +145,14 @@ public class VaguenessDetector implements ContextStep {
     String buildContextualPrompt(String prompt, PipelineContext context) {
         List<ConversationMessage> history = context.getConversationHistory();
         String docContext = context.getDocumentContext();
+        String driveContext = context.getDriveDocumentContext();
 
         boolean hasHistory = history != null && !history.isEmpty();
         boolean hasDocs = docContext != null && !docContext.isBlank();
+        boolean hasDriveDocs = driveContext != null && !driveContext.isBlank();
 
         // No context available — return raw prompt
-        if (!hasHistory && !hasDocs) {
+        if (!hasHistory && !hasDocs && !hasDriveDocs) {
             return prompt;
         }
 
@@ -181,12 +183,21 @@ public class VaguenessDetector implements ContextStep {
             sb.append(truncated).append("\n\n");
         }
 
+        // Add Drive document context hint (truncated)
+        if (hasDriveDocs) {
+            sb.append("## Documents Google Drive de l'utilisateur\n");
+            String truncated = driveContext.length() > 300
+                    ? driveContext.substring(0, 300) + "..."
+                    : driveContext;
+            sb.append(truncated).append("\n\n");
+        }
+
         // The actual message to analyze
         sb.append("## Message a analyser\n");
         sb.append(prompt);
 
-        log.debug("[VAGUENESS] Enriched prompt with context ({} history msgs, docs={})",
-                hasHistory ? Math.min(history.size(), 6) : 0, hasDocs);
+        log.debug("[VAGUENESS] Enriched prompt with context ({} history msgs, docs={}, driveDocs={})",
+                hasHistory ? Math.min(history.size(), 6) : 0, hasDocs, hasDriveDocs);
 
         return sb.toString();
     }

@@ -10,5 +10,6 @@ public interface AnalyzeContextUseCase {
     ContextAnalysis analyze(String prompt,
                             List<ConversationMessage> conversationHistory,
                             String documentContext,
+                            String driveDocumentContext,
                             boolean webSearchRequested);
 }

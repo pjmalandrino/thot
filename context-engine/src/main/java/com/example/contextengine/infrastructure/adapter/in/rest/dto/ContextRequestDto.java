@@ -9,6 +9,7 @@ public class ContextRequestDto {
     private String prompt;
     private List<ConversationMessageDto> conversationHistory;
     private String documentContext;
+    private String driveDocumentContext;
     private boolean webSearchRequested;
 
     public record ConversationMessageDto(String role, String content) {
@@ -30,6 +31,9 @@ public class ContextRequestDto {
 
     public String getDocumentContext() { return documentContext; }
     public void setDocumentContext(String documentContext) { this.documentContext = documentContext; }
+
+    public String getDriveDocumentContext() { return driveDocumentContext; }
+    public void setDriveDocumentContext(String driveDocumentContext) { this.driveDocumentContext = driveDocumentContext; }
 
     public boolean isWebSearchRequested() { return webSearchRequested; }
     public void setWebSearchRequested(boolean webSearchRequested) { this.webSearchRequested = webSearchRequested; }

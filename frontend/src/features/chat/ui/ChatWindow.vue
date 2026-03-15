@@ -37,6 +37,7 @@
               <span class="pill pill-llm">Thot</span>
               <span v-if="item.sources && item.sources.length" class="pill pill-web">Web</span>
               <span v-if="item.autoWebSearchTriggered" class="pill pill-auto">Auto</span>
+              <span v-if="item.driveSearchPerformed" class="pill pill-drive">Drive</span>
               <span class="msg-meta">{{ formatDateTime(item.createdAt) }}</span>
             </div>
             <div class="msg-text llm-text md-content" v-html="renderMarkdown(item.response, item.sources)"></div>
@@ -114,6 +115,7 @@
             <kbd>&#8679;&#9166;</kbd> ligne
           </div>
           <div class="input-actions">
+            <DriveToggle :disabled="sending" />
             <DocumentAttachment
               :conversation-id="conversationId"
               :disabled="sending"
@@ -137,9 +139,11 @@ import { useChartRenderer } from './useChartRenderer.js'
 import { useModelStore } from '../../llm-model/store.js'
 import { useThotspaceStore } from '../../thotspace/store.js'
 import { useDocumentStore } from '../../document/store.js'
+import { useDriveStore } from '../../google-drive/store.js'
 import { fetchCompletions, sendCompletion } from '../api.js'
 import ModelSelect from '../../llm-model/ui/ModelSelect.vue'
 import DocumentAttachment from '../../document/ui/DocumentAttachment.vue'
+import DriveToggle from '../../google-drive/ui/DriveToggle.vue'
 import ThinkingIndicator from './ThinkingIndicator.vue'
 import SourcesFooter from './SourcesFooter.vue'
 
@@ -148,6 +152,7 @@ const props = defineProps({ conversationId: { type: Number, required: true } })
 const modelStore = useModelStore()
 const thotspaceStore = useThotspaceStore()
 const documentStore = useDocumentStore()
+const driveStore = useDriveStore()
 const activeSpaceName = computed(() => thotspaceStore.activeSpace?.name)
 
 const interactions = ref([])
@@ -204,7 +209,8 @@ async function sendPrompt(e) {
   try {
     const result = await sendCompletion(props.conversationId, {
       prompt: currentPrompt,
-      modelId: modelStore.selectedModelId
+      modelId: modelStore.selectedModelId,
+      driveSearchEnabled: driveStore.driveSearchEnabled
     })
 
     // Handle clarification from context-engine
@@ -241,7 +247,8 @@ async function useSuggestion(suggestion) {
     const result = await sendCompletion(props.conversationId, {
       prompt: original,
       modelId: modelStore.selectedModelId,
-      clarificationContext: suggestion
+      clarificationContext: suggestion,
+      driveSearchEnabled: driveStore.driveSearchEnabled
     })
 
     interactions.value.push(result)
@@ -441,6 +448,14 @@ onMounted(() => {
 }
 
 .pill-auto {
+  background: none;
+  border: 1px solid var(--accent-pop, #3DCAAD);
+  color: var(--accent-pop, #3DCAAD);
+  font-size: 0.55rem;
+  padding: 0.2rem 0.6rem;
+}
+
+.pill-drive {
   background: none;
   border: 1px solid var(--accent-pop, #3DCAAD);
   color: var(--accent-pop, #3DCAAD);

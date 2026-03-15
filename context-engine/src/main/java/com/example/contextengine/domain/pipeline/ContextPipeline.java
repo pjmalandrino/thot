@@ -62,6 +62,7 @@ public class ContextPipeline {
                 context.getRewrittenQuery(),
                 context.getWebSearchResults(),
                 context.getWebSearchContext(),
+                context.getDriveDocumentContext(),
                 context.isAutoWebSearchTriggered(),
                 context.getTokenBudget());
     }

@@ -72,6 +72,8 @@
       >
         Configuration
       </button>
+
+      <DriveConnectButton />
     </nav>
 
     <div class="sidebar-footer">
@@ -92,6 +94,7 @@ import { formatDateShort } from '../../../shared/utils/date.js'
 import { useConversationStore } from '../store.js'
 import { useThotspaceStore } from '../../thotspace/store.js'
 import SpaceSelector from '../../thotspace/ui/SpaceSelector.vue'
+import DriveConnectButton from '../../google-drive/ui/DriveConnectButton.vue'
 
 const router = useRouter()
 const route = useRoute()

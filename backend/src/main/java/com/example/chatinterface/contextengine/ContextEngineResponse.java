@@ -12,6 +12,7 @@ public class ContextEngineResponse {
     private String rewrittenQuery;
     private List<WebSearchResultDto> webSearchResults;
     private String webSearchContext;
+    private String driveDocumentContext;
     private boolean autoWebSearchTriggered;
     private Map<String, Integer> tokenUsage;
 
@@ -40,6 +41,8 @@ public class ContextEngineResponse {
     public void setWebSearchResults(List<WebSearchResultDto> webSearchResults) { this.webSearchResults = webSearchResults; }
     public String getWebSearchContext() { return webSearchContext; }
     public void setWebSearchContext(String webSearchContext) { this.webSearchContext = webSearchContext; }
+    public String getDriveDocumentContext() { return driveDocumentContext; }
+    public void setDriveDocumentContext(String driveDocumentContext) { this.driveDocumentContext = driveDocumentContext; }
     public boolean isAutoWebSearchTriggered() { return autoWebSearchTriggered; }
     public void setAutoWebSearchTriggered(boolean autoWebSearchTriggered) { this.autoWebSearchTriggered = autoWebSearchTriggered; }
     public Map<String, Integer> getTokenUsage() { return tokenUsage; }

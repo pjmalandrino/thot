@@ -9,4 +9,9 @@ import org.springframework.web.multipart.MultipartFile;
 public interface DocumentGateway {
 
     DocumentParseResult parse(MultipartFile file);
+
+    /**
+     * Parse raw bytes (e.g., from Google Drive download).
+     */
+    DocumentParseResult parse(byte[] content, String filename);
 }

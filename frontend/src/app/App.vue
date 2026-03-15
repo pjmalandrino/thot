@@ -13,15 +13,25 @@ import { RouterView } from 'vue-router'
 import { ConversationSidebar, useConversationStore } from '../features/conversation/index.js'
 import { useModelStore } from '../features/llm-model/store.js'
 import { useThotspaceStore } from '../features/thotspace/store.js'
+import { useDriveStore } from '../features/google-drive/store.js'
 
 const conversationStore = useConversationStore()
 const modelStore = useModelStore()
 const thotspaceStore = useThotspaceStore()
+const driveStore = useDriveStore()
 
 onMounted(async () => {
   await thotspaceStore.load()
   conversationStore.load(thotspaceStore.selectedSpaceId)
   modelStore.load()
+  driveStore.checkStatus()
+
+  // Handle OAuth callback redirect
+  const params = new URLSearchParams(window.location.search)
+  if (params.get('driveConnected') === 'true') {
+    driveStore.checkStatus()
+    window.history.replaceState({}, '', window.location.pathname)
+  }
 })
 </script>
 

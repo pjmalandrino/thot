@@ -15,6 +15,7 @@ public class ContextResponseDto {
     private String rewrittenQuery;
     private List<WebSearchResultDto> webSearchResults;
     private String webSearchContext;
+    private String driveDocumentContext;
     private boolean autoWebSearchTriggered;
     private Map<String, Integer> tokenUsage;
 
@@ -35,6 +36,7 @@ public class ContextResponseDto {
                 ? analysis.getWebSearchResults().stream().map(WebSearchResultDto::from).toList()
                 : null;
         dto.webSearchContext = analysis.getWebSearchContext();
+        dto.driveDocumentContext = analysis.getDriveDocumentContext();
         dto.autoWebSearchTriggered = analysis.isAutoWebSearchTriggered();
         dto.tokenUsage = analysis.getTokenUsage();
         return dto;
@@ -47,6 +49,7 @@ public class ContextResponseDto {
     public String getRewrittenQuery() { return rewrittenQuery; }
     public List<WebSearchResultDto> getWebSearchResults() { return webSearchResults; }
     public String getWebSearchContext() { return webSearchContext; }
+    public String getDriveDocumentContext() { return driveDocumentContext; }
     public boolean isAutoWebSearchTriggered() { return autoWebSearchTriggered; }
     public Map<String, Integer> getTokenUsage() { return tokenUsage; }
 }

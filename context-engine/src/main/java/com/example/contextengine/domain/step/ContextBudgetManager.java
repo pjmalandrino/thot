@@ -44,6 +44,12 @@ public class ContextBudgetManager implements ContextStep {
                 total += docTokens;
             }
 
+            if (context.getDriveDocumentContext() != null && !context.getDriveDocumentContext().isBlank()) {
+                int driveTokens = estimateTokens(context.getDriveDocumentContext());
+                budget.put("driveDocumentContext", driveTokens);
+                total += driveTokens;
+            }
+
             if (context.getWebSearchContext() != null && !context.getWebSearchContext().isBlank()) {
                 int webTokens = estimateTokens(context.getWebSearchContext());
                 budget.put("webSearchContext", webTokens);
@@ -72,7 +78,7 @@ public class ContextBudgetManager implements ContextStep {
 
     private int trimContext(PipelineContext context, Map<String, Integer> budget,
                             int total, int maxTokens) {
-        // Priority: trim web search first, then documents
+        // Priority: trim web search first, then Drive docs, then uploaded docs
         // Never trim the user prompt or conversation history
 
         if (total > maxTokens && context.getWebSearchContext() != null) {
@@ -85,6 +91,19 @@ public class ContextBudgetManager implements ContextStep {
                 total = total - webTokens + newWebTokens;
                 budget.put("webSearchContext", newWebTokens);
                 log.info("[BUDGET] Trimmed webSearchContext: {} -> {} tokens", webTokens, newWebTokens);
+            }
+        }
+
+        if (total > maxTokens && context.getDriveDocumentContext() != null) {
+            int driveTokens = budget.getOrDefault("driveDocumentContext", 0);
+            int allowedDrive = Math.max(0, driveTokens - (total - maxTokens));
+            if (allowedDrive < driveTokens) {
+                String trimmed = trimToTokens(context.getDriveDocumentContext(), allowedDrive);
+                context.setDriveDocumentContext(trimmed);
+                int newDriveTokens = estimateTokens(trimmed);
+                total = total - driveTokens + newDriveTokens;
+                budget.put("driveDocumentContext", newDriveTokens);
+                log.info("[BUDGET] Trimmed driveDocumentContext: {} -> {} tokens", driveTokens, newDriveTokens);
             }
         }
 

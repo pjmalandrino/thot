@@ -19,6 +19,9 @@ public class PipelineContext {
     private final WebSearchPort webSearchPort;
     private final int maxContextTokens;
 
+    // immutable Drive context (set at construction, may be trimmed by BudgetManager)
+    private String driveDocumentContext;
+
     // mutable — can be set by AutoWebSearchTrigger
     private boolean webSearchRequested;
     private boolean autoWebSearchTriggered;
@@ -38,7 +41,7 @@ public class PipelineContext {
                            boolean webSearchRequested,
                            LlmPort llmPort,
                            WebSearchPort webSearchPort) {
-        this(prompt, conversationHistory, documentContext, webSearchRequested, llmPort, webSearchPort, 8192);
+        this(prompt, conversationHistory, documentContext, null, webSearchRequested, llmPort, webSearchPort, 8192);
     }
 
     public PipelineContext(String prompt,
@@ -48,9 +51,21 @@ public class PipelineContext {
                            LlmPort llmPort,
                            WebSearchPort webSearchPort,
                            int maxContextTokens) {
+        this(prompt, conversationHistory, documentContext, null, webSearchRequested, llmPort, webSearchPort, maxContextTokens);
+    }
+
+    public PipelineContext(String prompt,
+                           List<ConversationMessage> conversationHistory,
+                           String documentContext,
+                           String driveDocumentContext,
+                           boolean webSearchRequested,
+                           LlmPort llmPort,
+                           WebSearchPort webSearchPort,
+                           int maxContextTokens) {
         this.prompt = prompt;
         this.conversationHistory = conversationHistory != null ? conversationHistory : List.of();
         this.documentContext = documentContext;
+        this.driveDocumentContext = driveDocumentContext;
         this.webSearchRequested = webSearchRequested;
         this.llmPort = llmPort;
         this.webSearchPort = webSearchPort;
@@ -67,6 +82,9 @@ public class PipelineContext {
     public LlmPort getLlmPort() { return llmPort; }
     public WebSearchPort getWebSearchPort() { return webSearchPort; }
     public int getMaxContextTokens() { return maxContextTokens; }
+
+    public String getDriveDocumentContext() { return driveDocumentContext; }
+    public void setDriveDocumentContext(String driveDocumentContext) { this.driveDocumentContext = driveDocumentContext; }
 
     public boolean isWebSearchRequested() { return webSearchRequested; }
     public void setWebSearchRequested(boolean webSearchRequested) { this.webSearchRequested = webSearchRequested; }

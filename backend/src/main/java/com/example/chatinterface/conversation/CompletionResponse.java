@@ -18,6 +18,7 @@ public class CompletionResponse {
     private List<String> suggestions;
     private String rewrittenQuery;
     private boolean autoWebSearchTriggered;
+    private boolean driveSearchPerformed;
     private Map<String, Integer> tokenUsage;
 
     public static CompletionResponse from(LlmInteraction interaction) {
@@ -45,9 +46,11 @@ public class CompletionResponse {
     // Pipeline metadata setters (builder-style)
     public CompletionResponse withPipelineMetadata(String rewrittenQuery,
                                                     boolean autoWebSearchTriggered,
+                                                    boolean driveSearchPerformed,
                                                     Map<String, Integer> tokenUsage) {
         this.rewrittenQuery = rewrittenQuery;
         this.autoWebSearchTriggered = autoWebSearchTriggered;
+        this.driveSearchPerformed = driveSearchPerformed;
         this.tokenUsage = tokenUsage;
         return this;
     }
@@ -62,5 +65,6 @@ public class CompletionResponse {
     public List<String> getSuggestions() { return suggestions; }
     public String getRewrittenQuery() { return rewrittenQuery; }
     public boolean isAutoWebSearchTriggered() { return autoWebSearchTriggered; }
+    public boolean isDriveSearchPerformed() { return driveSearchPerformed; }
     public Map<String, Integer> getTokenUsage() { return tokenUsage; }
 }

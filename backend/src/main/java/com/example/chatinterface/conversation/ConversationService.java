@@ -6,6 +6,8 @@ import com.example.chatinterface.contextengine.ContextEngineRequest.Conversation
 import com.example.chatinterface.contextengine.ContextEngineResponse;
 import com.example.chatinterface.document.DocumentRepository;
 import com.example.chatinterface.document.DocumentService;
+import com.example.chatinterface.googledrive.DriveSearchResult;
+import com.example.chatinterface.googledrive.GoogleDriveService;
 import com.example.chatinterface.llm.LlmGateway;
 import com.example.chatinterface.llm.LlmGatewayFactory;
 import com.example.chatinterface.llm.LlmModel;
@@ -19,6 +21,8 @@ import dev.langchain4j.memory.ChatMemory;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -117,6 +121,21 @@ public class ConversationService {
             %s
             """;
 
+    private static final String DRIVE_DOCUMENT_CONTEXT_TEMPLATE = """
+
+            ## Documents Google Drive
+            L'utilisateur a active la recherche dans son Google Drive. \
+            Les documents suivants ont ete trouves et sont pertinents pour sa question.
+
+            Regles :
+            - Base ta reponse sur le contenu des documents Drive quand c'est pertinent.
+            - Cite le nom du document Drive quand tu fais reference a son contenu.
+            - Indique clairement quand une information provient du Drive de l'utilisateur.
+            - Si les documents Drive ne contiennent pas l'information demandee, dis-le.
+
+            %s
+            """;
+
     // ── Dependencies ──────────────────────────────────────────────────────────
 
     private final ConversationRepository conversationRepository;
@@ -125,6 +144,7 @@ public class ConversationService {
     private final ContextEngineClient contextEngineClient;
     private final DocumentService documentService;
     private final DocumentRepository documentRepository;
+    private final GoogleDriveService googleDriveService;
     private final LlmGatewayFactory gatewayFactory;
     private final LlmModelRepository modelRepository;
 
@@ -135,6 +155,7 @@ public class ConversationService {
             ContextEngineClient contextEngineClient,
             DocumentService documentService,
             DocumentRepository documentRepository,
+            GoogleDriveService googleDriveService,
             LlmGatewayFactory gatewayFactory,
             LlmModelRepository modelRepository
     ) {
@@ -144,6 +165,7 @@ public class ConversationService {
         this.contextEngineClient = contextEngineClient;
         this.documentService = documentService;
         this.documentRepository = documentRepository;
+        this.googleDriveService = googleDriveService;
         this.gatewayFactory = gatewayFactory;
         this.modelRepository = modelRepository;
     }
@@ -193,15 +215,16 @@ public class ConversationService {
      * Returns CompletionResponse with full pipeline metadata.
      */
     public CompletionResponse complete(Long conversationId, String prompt, Long modelId) {
-        return complete(conversationId, prompt, modelId, null);
+        return complete(conversationId, prompt, modelId, null, false);
     }
 
     /**
-     * Completion with optional clarification context.
+     * Completion with optional clarification context and Drive search toggle.
      * When clarificationContext is present, the user has already answered a clarification question —
      * we skip the context-engine (no re-vagueness check) and inject the clarification transparently.
      */
-    public CompletionResponse complete(Long conversationId, String prompt, Long modelId, String clarificationContext) {
+    public CompletionResponse complete(Long conversationId, String prompt, Long modelId,
+                                        String clarificationContext, boolean driveSearchEnabled) {
         Conversation conversation = conversationRepository.findById(conversationId)
                 .orElseThrow(() -> new RuntimeException("Conversation not found"));
 
@@ -214,7 +237,7 @@ public class ConversationService {
         }
 
         // Normal path: full context-engine pipeline
-        return completeWithPipeline(conversation, prompt, modelId, documentContext);
+        return completeWithPipeline(conversation, prompt, modelId, documentContext, driveSearchEnabled);
     }
 
     private CompletionResponse completeWithClarification(
@@ -223,7 +246,7 @@ public class ConversationService {
 
         // Build system prompt with clarification hint
         String systemPromptText = buildSystemPrompt(
-                conversation.getThotspace(), documentContext, null);
+                conversation.getThotspace(), documentContext, null, null);
         systemPromptText += String.format(CLARIFICATION_CONTEXT_TEMPLATE, clarificationContext);
 
         // Build memory and generate
@@ -244,13 +267,32 @@ public class ConversationService {
     }
 
     private CompletionResponse completeWithPipeline(
-            Conversation conversation, String prompt, Long modelId, String documentContext) {
+            Conversation conversation, String prompt, Long modelId,
+            String documentContext, boolean driveSearchEnabled) {
+
+        // 0. Drive search BEFORE context-engine (avoids circular dependency)
+        String driveDocumentContext = null;
+        boolean driveSearchPerformed = false;
+        if (driveSearchEnabled) {
+            try {
+                String userId = extractUserId();
+                log.info("[COMPLETION] Drive search enabled for user '{}', query: '{}'", userId, prompt);
+                DriveSearchResult driveResult = googleDriveService.searchAndExtract(userId, prompt, 3);
+                driveDocumentContext = driveResult.driveDocumentContext();
+                driveSearchPerformed = driveDocumentContext != null && !driveDocumentContext.isBlank();
+                log.info("[COMPLETION] Drive search returned {} documents", driveResult.documents().size());
+            } catch (Exception e) {
+                log.warn("[COMPLETION] Drive search failed, continuing without Drive: {}", e.getMessage());
+                // fail-open: Drive indisponible ne casse pas le flow
+            }
+        }
 
         // 1. Call context-engine — auto-search decides about web
         ContextEngineRequest ceRequest = new ContextEngineRequest();
         ceRequest.setPrompt(prompt);
         ceRequest.setWebSearchRequested(false);
         ceRequest.setDocumentContext(documentContext);
+        ceRequest.setDriveDocumentContext(driveDocumentContext);
         ceRequest.setConversationHistory(buildRecentHistory(conversation.getId()));
 
         ContextEngineResponse ceResponse = contextEngineClient.analyze(ceRequest);
@@ -269,9 +311,10 @@ public class ConversationService {
                 ? ceResponse.getRewrittenQuery()
                 : prompt;
 
-        // 4. Build system prompt with web search context if present
+        // 4. Build system prompt (Drive context may have been trimmed by BudgetManager)
         String systemPromptText = buildSystemPrompt(
-                conversation.getThotspace(), documentContext, ceResponse.getWebSearchContext());
+                conversation.getThotspace(), documentContext,
+                ceResponse.getWebSearchContext(), ceResponse.getDriveDocumentContext());
 
         // 5. Build memory and generate
         ChatMemory memory = buildMemory(conversation.getId());
@@ -299,6 +342,7 @@ public class ConversationService {
                 .withPipelineMetadata(
                         ceResponse.getRewrittenQuery(),
                         ceResponse.isAutoWebSearchTriggered(),
+                        driveSearchPerformed,
                         ceResponse.getTokenUsage());
     }
 
@@ -311,13 +355,17 @@ public class ConversationService {
 
     // ── Private helpers ───────────────────────────────────────────────────────
 
-    private String buildSystemPrompt(Thotspace space, String documentContext, String webSearchContext) {
+    private String buildSystemPrompt(Thotspace space, String documentContext,
+                                      String webSearchContext, String driveDocumentContext) {
         StringBuilder sb = new StringBuilder(BASE_SYSTEM_PROMPT);
         if (space != null && space.getSystemPrompt() != null && !space.getSystemPrompt().isBlank()) {
             sb.append(String.format(SPACE_INSTRUCTIONS_TEMPLATE, space.getSystemPrompt()));
         }
         if (documentContext != null) {
             sb.append(String.format(DOCUMENT_CONTEXT_TEMPLATE, documentContext));
+        }
+        if (driveDocumentContext != null && !driveDocumentContext.isBlank()) {
+            sb.append(String.format(DRIVE_DOCUMENT_CONTEXT_TEMPLATE, driveDocumentContext));
         }
         if (webSearchContext != null) {
             sb.append(String.format(WEB_SEARCH_CONTEXT_TEMPLATE, webSearchContext));
@@ -366,5 +414,13 @@ public class ConversationService {
             conversation.setTitle(title);
             conversationRepository.save(conversation);
         }
+    }
+
+    private String extractUserId() {
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth instanceof JwtAuthenticationToken jwtAuth) {
+            return jwtAuth.getToken().getSubject();
+        }
+        throw new RuntimeException("No JWT authentication found");
     }
 }
