@@ -12,6 +12,10 @@ public class CompletionResponse {
     private LocalDateTime createdAt;
     private List<SourceInfo> sources;
 
+    // Mode & reasoning
+    private String mode;                         // "standard" | "think" | "research"
+    private String thinking;                     // reasoning content (think mode)
+
     // Pipeline metadata
     private String status;                      // "continue" | "clarification_needed"
     private String clarificationMessage;
@@ -27,6 +31,9 @@ public class CompletionResponse {
         r.response = interaction.getResponse();
         r.createdAt = interaction.getCreatedAt();
         r.sources = interaction.getSources();
+        r.mode = interaction.getMode();
+        r.thinking = interaction.getThinking();
+        r.autoWebSearchTriggered = interaction.isAutoWebSearchTriggered();
         r.status = "continue";
         return r;
     }
@@ -63,4 +70,6 @@ public class CompletionResponse {
     public String getRewrittenQuery() { return rewrittenQuery; }
     public boolean isAutoWebSearchTriggered() { return autoWebSearchTriggered; }
     public Map<String, Integer> getTokenUsage() { return tokenUsage; }
+    public String getMode() { return mode; }
+    public String getThinking() { return thinking; }
 }

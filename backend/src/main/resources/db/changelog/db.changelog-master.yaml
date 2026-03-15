@@ -19,3 +19,9 @@ databaseChangeLog:
       file: db/changelog/changes/009-add-thotspace-to-conversations.yaml
   - include:
       file: db/changelog/changes/010-create-documents-table.yaml
+  - include:
+      file: db/changelog/changes/011-add-mode-thinking-to-interactions.yaml
+  - include:
+      file: db/changelog/changes/012-seed-magistral-models.yaml
+  - include:
+      file: db/changelog/changes/013-add-auto-web-search-to-interactions.yaml

@@ -76,7 +76,7 @@ public class WebSearchRelevanceFilter implements ContextStep {
         }
     }
 
-    double computeRelevanceScore(Set<String> queryTerms, SearchResult result) {
+    public static double computeRelevanceScore(Set<String> queryTerms, SearchResult result) {
         if (queryTerms.isEmpty()) return 1.0;
 
         String content = (result.sourceTitle() + " " + result.extractedText()).toLowerCase();
@@ -89,7 +89,7 @@ public class WebSearchRelevanceFilter implements ContextStep {
         return (double) matchingTerms / queryTerms.size();
     }
 
-    static Set<String> tokenize(String text) {
+    public static Set<String> tokenize(String text) {
         if (text == null || text.isBlank()) return Set.of();
         return Arrays.stream(text.toLowerCase().split("[\\s\\p{Punct}]+"))
                 .filter(w -> w.length() > 2) // skip short words (le, de, a, ...)

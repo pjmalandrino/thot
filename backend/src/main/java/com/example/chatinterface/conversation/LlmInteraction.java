@@ -41,6 +41,15 @@ public class LlmInteraction {
     @Convert(converter = SourceInfoListConverter.class)
     private List<SourceInfo> sources;
 
+    @Column(nullable = false, length = 20)
+    private String mode = "standard";
+
+    @Column(columnDefinition = "TEXT")
+    private String thinking;
+
+    @Column(name = "auto_web_search_triggered", nullable = false)
+    private boolean autoWebSearchTriggered = false;
+
     public LlmInteraction() {}
 
     public LlmInteraction(Conversation conversation, String prompt, String response) {
@@ -55,10 +64,22 @@ public class LlmInteraction {
         this.sources = sources;
     }
 
+    public LlmInteraction(Conversation conversation, String prompt, String response,
+                           String mode, String thinking, List<SourceInfo> sources) {
+        this(conversation, prompt, response);
+        this.mode = mode;
+        this.thinking = thinking;
+        this.sources = sources;
+    }
+
     public Long getId() { return id; }
     public Conversation getConversation() { return conversation; }
     public String getPrompt() { return prompt; }
     public String getResponse() { return response; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public List<SourceInfo> getSources() { return sources; }
+    public String getMode() { return mode; }
+    public String getThinking() { return thinking; }
+    public boolean isAutoWebSearchTriggered() { return autoWebSearchTriggered; }
+    public void setAutoWebSearchTriggered(boolean autoWebSearchTriggered) { this.autoWebSearchTriggered = autoWebSearchTriggered; }
 }

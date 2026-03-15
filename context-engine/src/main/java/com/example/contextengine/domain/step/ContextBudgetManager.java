@@ -101,7 +101,7 @@ public class ContextBudgetManager implements ContextStep {
         return total;
     }
 
-    static int estimateTokens(String text) {
+    public static int estimateTokens(String text) {
         if (text == null || text.isBlank()) return 0;
         // Heuristic: ~4 characters per token for mixed French/English text
         return (int) Math.ceil(text.length() / 4.0);

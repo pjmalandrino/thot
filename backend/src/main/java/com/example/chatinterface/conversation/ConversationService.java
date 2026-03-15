@@ -309,6 +309,52 @@ public class ConversationService {
         conversationRepository.deleteById(conversationId);
     }
 
+    // ── Streaming persistence ─────────────────────────────────────────────────
+
+    /**
+     * Persists the result of a streaming completion (Think or Research mode).
+     * Called after the SSE stream completes with the accumulated data.
+     */
+    @Transactional
+    public CompletionResponse persistStreamResult(Long conversationId, String prompt,
+                                                   String mode, String response,
+                                                   String thinking, List<SourceInfo> sources,
+                                                   boolean autoWebSearchTriggered) {
+        Conversation conversation = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new RuntimeException("Conversation not found"));
+
+        LlmInteraction interaction = new LlmInteraction(conversation, prompt, response, mode, thinking,
+                sources != null ? sources : List.of());
+        interaction.setAutoWebSearchTriggered(autoWebSearchTriggered);
+        interactionRepository.save(interaction);
+
+        autoTitle(conversation, prompt);
+
+        return CompletionResponse.from(interaction);
+    }
+
+    /**
+     * Builds document context for a conversation (exposed for streaming controller).
+     */
+    public String getDocumentContext(Long conversationId) {
+        return documentService.buildDocumentContext(conversationId);
+    }
+
+    /**
+     * Builds the base system prompt (THOT identity + space instructions) for streaming modes.
+     * Does NOT include document or web search context — those are managed by context-engine.
+     */
+    public String getBaseSystemPrompt(Long conversationId) {
+        Conversation conversation = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new RuntimeException("Conversation not found"));
+        StringBuilder sb = new StringBuilder(BASE_SYSTEM_PROMPT);
+        Thotspace space = conversation.getThotspace();
+        if (space != null && space.getSystemPrompt() != null && !space.getSystemPrompt().isBlank()) {
+            sb.append(String.format(SPACE_INSTRUCTIONS_TEMPLATE, space.getSystemPrompt()));
+        }
+        return sb.toString();
+    }
+
     // ── Private helpers ───────────────────────────────────────────────────────
 
     private String buildSystemPrompt(Thotspace space, String documentContext, String webSearchContext) {
@@ -338,7 +384,7 @@ public class ConversationService {
                 .orElseThrow(() -> new RuntimeException("No enabled LLM model available"));
     }
 
-    private List<ConversationMessageDto> buildRecentHistory(Long conversationId) {
+    public List<ConversationMessageDto> buildRecentHistory(Long conversationId) {
         List<LlmInteraction> history = interactionRepository
                 .findByConversationIdOrderByCreatedAtAsc(conversationId);
         int start = Math.max(0, history.size() - 5);
