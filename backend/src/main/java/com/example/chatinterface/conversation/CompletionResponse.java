@@ -33,6 +33,7 @@ public class CompletionResponse {
         r.sources = interaction.getSources();
         r.mode = interaction.getMode();
         r.thinking = interaction.getThinking();
+        r.autoWebSearchTriggered = interaction.isAutoWebSearchTriggered();
         r.status = "continue";
         return r;
     }

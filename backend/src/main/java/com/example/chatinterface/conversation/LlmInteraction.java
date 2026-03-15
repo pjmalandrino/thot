@@ -47,6 +47,9 @@ public class LlmInteraction {
     @Column(columnDefinition = "TEXT")
     private String thinking;
 
+    @Column(name = "auto_web_search_triggered", nullable = false)
+    private boolean autoWebSearchTriggered = false;
+
     public LlmInteraction() {}
 
     public LlmInteraction(Conversation conversation, String prompt, String response) {
@@ -77,4 +80,6 @@ public class LlmInteraction {
     public List<SourceInfo> getSources() { return sources; }
     public String getMode() { return mode; }
     public String getThinking() { return thinking; }
+    public boolean isAutoWebSearchTriggered() { return autoWebSearchTriggered; }
+    public void setAutoWebSearchTriggered(boolean autoWebSearchTriggered) { this.autoWebSearchTriggered = autoWebSearchTriggered; }
 }

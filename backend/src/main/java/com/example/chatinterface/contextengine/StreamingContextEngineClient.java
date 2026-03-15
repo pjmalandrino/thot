@@ -42,7 +42,7 @@ public class StreamingContextEngineClient {
      * Sends params as POST JSON body (supports large documentContext).
      * Calls onDone when a "done" event is received with the raw JSON data.
      */
-    public void proxyStream(String endpoint, Map<String, String> params,
+    public void proxyStream(String endpoint, Map<String, Object> params,
                             SseEmitter clientEmitter,
                             Consumer<String> onDone,
                             Consumer<Throwable> onError) {

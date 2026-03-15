@@ -57,10 +57,11 @@ public class StreamingController {
      * No pipeline steps — just raw reasoning + answer.
      */
     @PostMapping(value = "/api/stream/think", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter streamThink(@RequestBody Map<String, String> body) {
-        String prompt = body.get("prompt");
-        String documentContext = body.get("documentContext");
-        String model = body.getOrDefault("model", "magistral-small-latest");
+    public SseEmitter streamThink(@RequestBody Map<String, Object> body) {
+        String prompt = (String) body.get("prompt");
+        String documentContext = (String) body.get("documentContext");
+        String baseSystemPrompt = (String) body.get("systemPrompt");
+        List<ConversationMessage> conversationHistory = extractConversationHistory(body);
         SseEmitter emitter = new SseEmitter(SSE_TIMEOUT);
         log.info("[STREAM-THINK] Starting think stream for prompt: {}", prompt);
 
@@ -69,10 +70,10 @@ public class StreamingController {
             StringBuilder answerAccumulator = new StringBuilder();
 
             try {
-                String systemPrompt = buildThinkSystemPrompt(documentContext);
+                String systemPrompt = buildThinkSystemPrompt(baseSystemPrompt, documentContext);
 
                 streamingLlmPort.streamThinkAndAnswer(
-                        systemPrompt, prompt,
+                        systemPrompt, prompt, conversationHistory,
                         chunk -> {
                             thinkingAccumulator.append(chunk.content());
                             sendEvent(emitter, "thinking", "{\"content\":" + quote(chunk.content()) + "}");
@@ -90,7 +91,7 @@ public class StreamingController {
                             String donePayload = buildDonePayload(
                                     answerAccumulator.toString(),
                                     thinkingAccumulator.toString(),
-                                    List.of());
+                                    List.of(), false);
                             sendEvent(emitter, "done", donePayload);
                             emitter.complete();
                             log.info("[STREAM-THINK] Stream completed");
@@ -114,15 +115,17 @@ public class StreamingController {
     public SseEmitter streamResearch(@RequestBody Map<String, Object> body) {
         String prompt = (String) body.get("prompt");
         String documentContext = (String) body.get("documentContext");
+        String baseSystemPrompt = (String) body.get("systemPrompt");
         boolean webSearchRequested = Boolean.parseBoolean(String.valueOf(body.getOrDefault("webSearchRequested", "false")));
+        List<ConversationMessage> conversationHistory = extractConversationHistory(body);
         SseEmitter emitter = new SseEmitter(SSE_TIMEOUT);
         log.info("[STREAM-RESEARCH] Starting research stream for prompt: {}", prompt);
 
         streamingExecutor.execute(() -> {
             try {
-                // 1. Run streaming pipeline (emits step events)
+                // 1. Run streaming pipeline (emits step events) — with real conversation history
                 PipelineContext context = new PipelineContext(
-                        prompt, List.of(), documentContext,
+                        prompt, conversationHistory, documentContext,
                         webSearchRequested, llmPort, webSearchPort,
                         properties.getMaxContextTokens());
 
@@ -146,17 +149,19 @@ public class StreamingController {
                 // 4. Stream LLM synthesis
                 String effectivePrompt = analysis.getRewrittenQuery() != null
                         ? analysis.getRewrittenQuery() : prompt;
-                String systemPrompt = buildResearchSystemPrompt(documentContext, analysis.getWebSearchContext());
+                String systemPrompt = buildResearchSystemPrompt(baseSystemPrompt, documentContext, analysis.getWebSearchContext());
 
                 sendEvent(emitter, "step",
                         "{\"stepId\":\"synthesis\",\"status\":\"running\",\"label\":\"Synthese en cours...\"}");
 
-                // Use streaming LLM for the synthesis phase
                 StringBuilder answerAccumulator = new StringBuilder();
+                StringBuilder thinkingAccumulator = new StringBuilder();
+
                 streamingLlmPort.streamThinkAndAnswer(
-                        systemPrompt, effectivePrompt,
+                        systemPrompt, effectivePrompt, conversationHistory,
                         thinking -> {
-                            // In research mode, skip thinking display — just accumulate
+                            thinkingAccumulator.append(thinking.content());
+                            sendEvent(emitter, "thinking", "{\"content\":" + quote(thinking.content()) + "}");
                         },
                         chunk -> {
                             answerAccumulator.append(chunk.content());
@@ -173,8 +178,9 @@ public class StreamingController {
 
                             String donePayload = buildDonePayload(
                                     answerAccumulator.toString(),
-                                    null,
-                                    analysis.getWebSearchResults() != null ? analysis.getWebSearchResults() : List.of());
+                                    thinkingAccumulator.toString(),
+                                    analysis.getWebSearchResults() != null ? analysis.getWebSearchResults() : List.of(),
+                                    analysis.isAutoWebSearchTriggered());
                             sendEvent(emitter, "done", donePayload);
                             emitter.complete();
                             log.info("[STREAM-RESEARCH] Stream completed");
@@ -190,6 +196,26 @@ public class StreamingController {
         return emitter;
     }
 
+    // ── Helpers ────────────────────────────────────────────────────────────────
+
+    @SuppressWarnings("unchecked")
+    private List<ConversationMessage> extractConversationHistory(Map<String, Object> body) {
+        Object historyObj = body.get("conversationHistory");
+        if (historyObj == null) return List.of();
+        if (historyObj instanceof List<?> list) {
+            return list.stream()
+                    .filter(item -> item instanceof Map)
+                    .map(item -> {
+                        Map<String, Object> map = (Map<String, Object>) item;
+                        return new ConversationMessage(
+                                String.valueOf(map.get("role")),
+                                String.valueOf(map.get("content")));
+                    })
+                    .toList();
+        }
+        return List.of();
+    }
+
     private void sendEvent(SseEmitter emitter, String eventName, String data) {
         try {
             emitter.send(SseEmitter.event().name(eventName).data(data));
@@ -198,10 +224,14 @@ public class StreamingController {
         }
     }
 
-    private String buildThinkSystemPrompt(String documentContext) {
+    private String buildThinkSystemPrompt(String baseSystemPrompt, String documentContext) {
         StringBuilder sb = new StringBuilder();
-        sb.append("Tu es un assistant expert en raisonnement. ");
-        sb.append("Analyse le probleme en profondeur, etape par etape. ");
+        if (baseSystemPrompt != null && !baseSystemPrompt.isBlank()) {
+            sb.append(baseSystemPrompt);
+        } else {
+            sb.append("Tu es un assistant expert en raisonnement.");
+        }
+        sb.append("\n\nAnalyse le probleme en profondeur, etape par etape. ");
         sb.append("Fournis une reponse claire et structuree.");
         if (documentContext != null && !documentContext.isBlank()) {
             sb.append("\n\nContexte documentaire:\n").append(documentContext);
@@ -209,24 +239,40 @@ public class StreamingController {
         return sb.toString();
     }
 
-    private String buildResearchSystemPrompt(String documentContext, String webSearchContext) {
+    private String buildResearchSystemPrompt(String baseSystemPrompt, String documentContext, String webSearchContext) {
         StringBuilder sb = new StringBuilder();
-        sb.append("Tu es un assistant de recherche. Synthetise les informations trouvees ");
-        sb.append("et fournis une reponse precise avec des citations aux sources [1], [2], etc.");
+        if (baseSystemPrompt != null && !baseSystemPrompt.isBlank()) {
+            sb.append(baseSystemPrompt);
+        } else {
+            sb.append("Tu es un assistant de recherche.");
+        }
         if (documentContext != null && !documentContext.isBlank()) {
-            sb.append("\n\nContexte documentaire:\n").append(documentContext);
+            sb.append("\n\n## Documents attaches\n");
+            sb.append("Utilise leur contenu pour repondre aux questions.\n\n");
+            sb.append(documentContext);
         }
         if (webSearchContext != null && !webSearchContext.isBlank()) {
-            sb.append("\n\nSources web:\n").append(webSearchContext);
+            sb.append("\n\n## Mode recherche web\n");
+            sb.append("Reponds en te basant UNIQUEMENT sur les sources fournies ci-dessous.\n\n");
+            sb.append("Regles strictes :\n");
+            sb.append("- Cite tes sources avec [1], [2], etc. correspondant EXACTEMENT aux numeros ci-dessous.\n");
+            sb.append("- N'invente AUCUN numero de source qui n'existe pas dans la liste.\n");
+            sb.append("- Si les sources ne couvrent pas un point, dis-le clairement.\n");
+            sb.append("- A la fin, ajoute une section 'Sources :' listant les URLs citees.\n\n");
+            sb.append("Sources :\n").append(webSearchContext);
+        } else {
+            sb.append("\n\nSynthetise les informations trouvees et fournis une reponse precise.");
         }
         return sb.toString();
     }
 
-    private String buildDonePayload(String response, String thinking, List<SearchResult> sources) {
+    private String buildDonePayload(String response, String thinking,
+                                     List<SearchResult> sources, boolean autoWebSearchTriggered) {
         try {
             var node = mapper.createObjectNode();
             node.put("response", response);
             if (thinking != null && !thinking.isBlank()) node.put("thinking", thinking);
+            node.put("autoWebSearchTriggered", autoWebSearchTriggered);
             var sourcesArray = node.putArray("sources");
             for (SearchResult s : sources) {
                 var sourceNode = sourcesArray.addObject();

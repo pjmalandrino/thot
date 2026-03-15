@@ -1,10 +1,15 @@
 <template>
-  <div class="thinking-block" :class="{ collapsed: isCollapsed, streaming: isStreaming }">
+  <div class="thinking-block" :class="[
+    { collapsed: isCollapsed, streaming: isStreaming },
+    'mode-' + mode
+  ]">
     <button class="thinking-header" @click="toggleCollapse">
-      <span class="thinking-icon">{{ isCollapsed ? '&#9654;' : '&#9660;' }}</span>
-      <span class="thinking-title">Raisonnement</span>
+      <svg class="thinking-icon" :class="{ rotated: !isCollapsed }" width="8" height="8" viewBox="0 0 8 8" fill="currentColor">
+        <polygon points="1,0 7,4 1,8" />
+      </svg>
+      <span class="thinking-title">{{ mode === 'research' ? 'Analyse' : 'Raisonnement' }}</span>
       <span v-if="isStreaming" class="thinking-badge streaming-badge">en cours</span>
-      <span v-else class="thinking-badge done-badge">{{ tokenCount }} tokens</span>
+      <span v-else class="thinking-badge done-badge">{{ formatTokens(tokenCount) }}</span>
     </button>
     <div v-show="!isCollapsed" class="thinking-content">
       <div class="thinking-text" v-html="renderedContent"></div>
@@ -20,7 +25,8 @@ import { renderMarkdown } from './markdown.js'
 const props = defineProps({
   content: { type: String, default: '' },
   isStreaming: { type: Boolean, default: false },
-  startCollapsed: { type: Boolean, default: false }
+  startCollapsed: { type: Boolean, default: false },
+  mode: { type: String, default: 'think' }
 })
 
 const isCollapsed = ref(props.startCollapsed)
@@ -37,6 +43,11 @@ const tokenCount = computed(() => {
   return Math.ceil(props.content.length / 4)
 })
 
+function formatTokens(count) {
+  if (count >= 1000) return (count / 1000).toFixed(1) + 'k tokens'
+  return count + ' tokens'
+}
+
 function toggleCollapse() {
   isCollapsed.value = !isCollapsed.value
 }
@@ -46,13 +57,29 @@ function toggleCollapse() {
 .thinking-block {
   margin: 0.75rem 0;
   border: 1px solid var(--border);
-  background: rgba(0, 0, 0, 0.015);
+  background: rgba(0, 0, 0, 0.025);
   animation: fadeInUp 0.3s ease;
 }
 
-.thinking-block.streaming {
+/* Think mode: gold accent */
+.thinking-block.mode-think.streaming {
   border-color: var(--accent);
   border-left: 3px solid var(--accent);
+}
+
+/* Research mode: teal accent (matches ThinkingIndicator) */
+.thinking-block.mode-research.streaming {
+  border-color: var(--accent-pop);
+  border-left: 3px solid var(--accent-pop);
+}
+
+/* Non-streaming (historical) — subtle left accent */
+.thinking-block:not(.streaming).mode-think {
+  border-left: 3px solid rgba(139, 92, 246, 0.3);
+}
+
+.thinking-block:not(.streaming).mode-research {
+  border-left: 3px solid rgba(61, 202, 173, 0.3);
 }
 
 .thinking-header {
@@ -77,12 +104,27 @@ function toggleCollapse() {
 }
 
 .thinking-icon {
-  font-size: 0.55rem;
-  width: 10px;
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+  opacity: 0.6;
+}
+
+.thinking-icon.rotated {
+  transform: rotate(90deg);
 }
 
 .thinking-title {
   font-weight: 600;
+}
+
+.mode-research .thinking-title {
+  color: var(--accent-pop);
+}
+
+.mode-think .thinking-title {
+  color: #8B5CF6;
 }
 
 .thinking-badge {
@@ -92,9 +134,15 @@ function toggleCollapse() {
   border-radius: 50px;
 }
 
-.streaming-badge {
-  background: rgba(212, 164, 56, 0.12);
-  color: var(--accent);
+.mode-think .streaming-badge {
+  background: rgba(139, 92, 246, 0.12);
+  color: #8B5CF6;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.mode-research .streaming-badge {
+  background: rgba(61, 202, 173, 0.12);
+  color: var(--accent-pop);
   animation: pulse 1.5s ease-in-out infinite;
 }
 
@@ -109,6 +157,7 @@ function toggleCollapse() {
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
+  border-top: 1px solid var(--border);
 }
 
 .thinking-text {
@@ -117,6 +166,7 @@ function toggleCollapse() {
   line-height: 1.7;
   color: var(--text-mid);
   white-space: pre-wrap;
+  padding-top: 0.75rem;
 }
 
 .thinking-text :deep(p) { margin-bottom: 0.5rem; }
@@ -127,6 +177,10 @@ function toggleCollapse() {
   animation: blink 1s step-end infinite;
   color: var(--accent);
   font-size: 0.8rem;
+}
+
+.mode-research .thinking-cursor {
+  color: var(--accent-pop);
 }
 
 @keyframes blink {

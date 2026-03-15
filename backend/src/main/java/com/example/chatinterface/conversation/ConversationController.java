@@ -83,12 +83,19 @@ public class ConversationController {
         streamExecutor.execute(() -> {
             try {
                 String documentContext = conversationService.getDocumentContext(id);
+                String baseSystemPrompt = conversationService.getBaseSystemPrompt(id);
+                var history = conversationService.buildRecentHistory(id);
                 String endpoint = "think".equals(mode) ? "/api/stream/think" : "/api/stream/research";
 
-                Map<String, String> params = new LinkedHashMap<>();
+                Map<String, Object> params = new LinkedHashMap<>();
                 params.put("prompt", prompt);
                 if (documentContext != null && !documentContext.isBlank()) {
                     params.put("documentContext", documentContext);
+                }
+                params.put("systemPrompt", baseSystemPrompt);
+                params.put("conversationHistory", history);
+                if ("research".equals(mode)) {
+                    params.put("webSearchRequested", true);
                 }
 
                 streamingClient.proxyStream(endpoint, params, emitter,
@@ -98,6 +105,8 @@ public class ConversationController {
                                 JsonNode doneNode = mapper.readTree(doneData);
                                 String response = doneNode.has("response") ? doneNode.get("response").asText() : "";
                                 String thinking = doneNode.has("thinking") ? doneNode.get("thinking").asText() : null;
+                                boolean autoWebSearch = doneNode.has("autoWebSearchTriggered")
+                                        && doneNode.get("autoWebSearchTriggered").asBoolean(false);
 
                                 List<SourceInfo> sources = new ArrayList<>();
                                 if (doneNode.has("sources")) {
@@ -111,7 +120,7 @@ public class ConversationController {
                                 }
 
                                 conversationService.persistStreamResult(id, prompt, mode,
-                                        response, thinking, sources);
+                                        response, thinking, sources, autoWebSearch);
                                 log.info("[STREAM] Persisted {} interaction for conversation {}", mode, id);
                             } catch (Exception e) {
                                 log.error("[STREAM] Failed to persist: {}", e.getMessage());

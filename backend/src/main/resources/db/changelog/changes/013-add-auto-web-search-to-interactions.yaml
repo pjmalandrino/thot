@@ -1,0 +1,14 @@
+databaseChangeLog:
+  - changeSet:
+      id: 013-add-auto-web-search-to-interactions
+      author: thot
+      changes:
+        - addColumn:
+            tableName: llm_interactions
+            columns:
+              - column:
+                  name: auto_web_search_triggered
+                  type: BOOLEAN
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false

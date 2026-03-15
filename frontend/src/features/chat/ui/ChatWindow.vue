@@ -41,11 +41,18 @@
               <span v-if="item.autoWebSearchTriggered" class="pill pill-auto">Auto</span>
               <span class="msg-meta">{{ formatDateTime(item.createdAt) }}</span>
             </div>
+            <!-- Historical pipeline steps (Research mode) -->
+            <ThinkingIndicator
+              v-if="item.steps && item.steps.length"
+              :visible="true"
+              :sse-steps="item.steps"
+            />
             <!-- Historical thinking block (collapsed) -->
             <ThinkingBlock
               v-if="item.thinking"
               :content="item.thinking"
               :start-collapsed="true"
+              :mode="item.mode || 'think'"
             />
             <div class="msg-text llm-text md-content" v-html="renderMarkdown(item.response, item.sources)"></div>
             <SourcesFooter :sources="item.sources" />
@@ -101,11 +108,21 @@
               :sse-steps="stream.steps.value"
             />
 
+            <!-- Research mode: live thinking block (collapsed by default) -->
+            <ThinkingBlock
+              v-if="selectedMode === 'research' && stream.thinking.value"
+              :content="stream.thinking.value"
+              :is-streaming="true"
+              :start-collapsed="true"
+              mode="research"
+            />
+
             <!-- Think mode: live thinking block -->
             <ThinkingBlock
               v-if="selectedMode === 'think' && stream.thinking.value"
               :content="stream.thinking.value"
               :is-streaming="true"
+              mode="think"
             />
 
             <!-- Live answer rendering -->
@@ -166,6 +183,7 @@
                 :key="m.id"
                 class="mode-btn"
                 :class="{ active: selectedMode === m.id }"
+                :data-mode="m.id"
                 :disabled="isBusy"
                 @click="selectedMode = m.id"
               >{{ m.label }}</button>
@@ -265,12 +283,17 @@ watch(() => stream.doneData.value, async (data) => {
     pendingPrompt.value = streamingPrompt.value
   } else {
     // Push completed interaction to history
+    const effectiveSources = (data.sources && data.sources.length)
+      ? data.sources
+      : (stream.sources.value.length ? [...stream.sources.value] : [])
     interactions.value.push({
       prompt: streamingPrompt.value,
       response: data.response || stream.answer.value,
-      thinking: data.thinking || (stream.thinking.value || null),
-      sources: data.sources || stream.sources.value,
+      thinking: data.thinking || stream.thinking.value || null,
+      sources: effectiveSources,
       mode: selectedMode.value,
+      steps: selectedMode.value === 'research' ? [...stream.steps.value] : null,
+      autoWebSearchTriggered: data.autoWebSearchTriggered || false,
       createdAt: new Date().toISOString()
     })
     prompt.value = ''
@@ -541,6 +564,7 @@ onMounted(() => {
 .streaming-interaction {
   border-left: 3px solid var(--accent);
   padding-left: 1.25rem;
+  background: rgba(212, 164, 56, 0.02);
 }
 
 .msg { padding: 1.25rem 0; }
@@ -959,26 +983,45 @@ onMounted(() => {
 }
 
 .mode-btn {
-  padding: 0.25rem 0.65rem;
+  padding: 0.3rem 0.75rem;
   background: none;
   border: none;
   font-family: 'IBM Plex Mono', monospace;
-  font-size: 0.55rem;
+  font-size: 0.6rem;
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--text-light);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.25s ease;
 }
 
 .mode-btn:not(:last-child) {
   border-right: 1px solid var(--border);
 }
 
+.mode-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* Standard mode active */
 .mode-btn.active {
   background: var(--dark);
   color: var(--bg);
+}
+
+/* Think mode active — violet */
+.mode-btn.active[data-mode="think"] {
+  background: #8B5CF6;
+  color: #FFF;
+}
+
+/* Research mode active — teal */
+.mode-btn.active[data-mode="research"] {
+  background: var(--accent-pop);
+  color: var(--dark);
+  font-weight: 600;
 }
 
 .mode-btn:hover:not(.active):not(:disabled) {
@@ -986,8 +1029,16 @@ onMounted(() => {
   background: rgba(0, 0, 0, 0.03);
 }
 
+.mode-btn[data-mode="think"]:hover:not(.active):not(:disabled) {
+  color: #8B5CF6;
+}
+
+.mode-btn[data-mode="research"]:hover:not(.active):not(:disabled) {
+  color: var(--accent-pop);
+}
+
 .mode-btn:disabled {
-  opacity: 0.3;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
@@ -1039,7 +1090,7 @@ onMounted(() => {
 }
 
 .send-btn:disabled {
-  opacity: 0.15;
+  opacity: 0.35;
   cursor: not-allowed;
 }
 
