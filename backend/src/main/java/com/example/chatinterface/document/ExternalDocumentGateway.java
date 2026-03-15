@@ -1,5 +1,6 @@
 package com.example.chatinterface.document;
 
+import com.example.chatinterface.shared.exception.ServiceException;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -66,7 +67,7 @@ public class ExternalDocumentGateway implements DocumentGateway {
             try (Response response = httpClient.newCall(request).execute()) {
                 if (!response.isSuccessful()) {
                     String errorBody = response.body() != null ? response.body().string() : "no body";
-                    throw new RuntimeException("Parser returned " + response.code() + ": " + errorBody);
+                    throw new ServiceException("Parser returned " + response.code() + ": " + errorBody);
                 }
                 String responseBody = response.body().string();
                 ExternalParseResponse parsed = objectMapper.readValue(responseBody, ExternalParseResponse.class);
@@ -84,7 +85,7 @@ public class ExternalDocumentGateway implements DocumentGateway {
             }
         } catch (IOException e) {
             log.error("[DOC-PARSE] Failed to parse document: {}", file.getOriginalFilename(), e);
-            throw new RuntimeException("Document parsing failed: " + e.getMessage(), e);
+            throw new ServiceException("Document parsing failed: " + e.getMessage(), e);
         }
     }
 

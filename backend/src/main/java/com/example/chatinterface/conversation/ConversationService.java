@@ -12,6 +12,8 @@ import com.example.chatinterface.llm.LlmModel;
 import com.example.chatinterface.llm.LlmModelRepository;
 import com.example.chatinterface.thotspace.Thotspace;
 import com.example.chatinterface.thotspace.ThotspaceRepository;
+import com.example.chatinterface.shared.exception.ResourceNotFoundException;
+import com.example.chatinterface.shared.exception.ServiceException;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
@@ -177,7 +179,7 @@ public class ConversationService {
         Thotspace space;
         if (thotspaceId != null) {
             space = thotspaceRepository.findById(thotspaceId)
-                    .orElseThrow(() -> new RuntimeException("Thotspace not found: " + thotspaceId));
+                    .orElseThrow(() -> new ResourceNotFoundException("Thotspace", thotspaceId));
         } else {
             space = thotspaceRepository.findByIsDefaultTrue()
                     .orElseGet(() -> {
@@ -191,7 +193,7 @@ public class ConversationService {
 
     public Conversation renameConversation(Long conversationId, String title) {
         Conversation conversation = conversationRepository.findById(conversationId)
-                .orElseThrow(() -> new RuntimeException("Conversation not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Conversation not found"));
         String trimmed = (title != null && !title.isBlank()) ? title.trim() : "Sans titre";
         conversation.setTitle(trimmed.length() > 100 ? trimmed.substring(0, 100) : trimmed);
         return conversationRepository.save(conversation);
@@ -218,7 +220,7 @@ public class ConversationService {
      */
     public CompletionResponse complete(Long conversationId, String prompt, Long modelId, String clarificationContext) {
         Conversation conversation = conversationRepository.findById(conversationId)
-                .orElseThrow(() -> new RuntimeException("Conversation not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Conversation not found"));
 
         String documentContext = documentService.buildDocumentContext(conversationId);
 
@@ -336,7 +338,7 @@ public class ConversationService {
                                                    String thinking, List<SourceInfo> sources,
                                                    boolean autoWebSearchTriggered) {
         Conversation conversation = conversationRepository.findById(conversationId)
-                .orElseThrow(() -> new RuntimeException("Conversation not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Conversation not found"));
 
         LlmInteraction interaction = new LlmInteraction(conversation, prompt, response, mode, thinking,
                 sources != null ? sources : List.of());
@@ -361,7 +363,7 @@ public class ConversationService {
      */
     public String getBaseSystemPrompt(Long conversationId) {
         Conversation conversation = conversationRepository.findById(conversationId)
-                .orElseThrow(() -> new RuntimeException("Conversation not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Conversation not found"));
         StringBuilder sb = new StringBuilder(BASE_SYSTEM_PROMPT);
         Thotspace space = conversation.getThotspace();
         if (space != null && space.getSystemPrompt() != null && !space.getSystemPrompt().isBlank()) {
@@ -396,7 +398,7 @@ public class ConversationService {
 
     private LlmModel defaultModel() {
         return modelRepository.findFirstByEnabledTrue()
-                .orElseThrow(() -> new RuntimeException("No enabled LLM model available"));
+                .orElseThrow(() -> new ServiceException("No enabled LLM model available"));
     }
 
     public List<ConversationMessageDto> buildRecentHistory(Long conversationId) {

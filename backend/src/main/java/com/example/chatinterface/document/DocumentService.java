@@ -2,6 +2,8 @@ package com.example.chatinterface.document;
 
 import com.example.chatinterface.conversation.Conversation;
 import com.example.chatinterface.conversation.ConversationRepository;
+import com.example.chatinterface.shared.exception.ResourceNotFoundException;
+import com.example.chatinterface.shared.exception.ValidationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -33,7 +35,7 @@ public class DocumentService {
 
     public Document upload(Long conversationId, MultipartFile file) {
         Conversation conversation = conversationRepository.findById(conversationId)
-                .orElseThrow(() -> new RuntimeException("Conversation not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Conversation not found"));
 
         log.info("[DOCUMENT] Parsing document '{}' for conversation {}",
                 file.getOriginalFilename(), conversationId);
@@ -61,9 +63,9 @@ public class DocumentService {
     @Transactional
     public void delete(Long conversationId, Long documentId) {
         Document doc = documentRepository.findById(documentId)
-                .orElseThrow(() -> new RuntimeException("Document not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Document not found"));
         if (!doc.getConversation().getId().equals(conversationId)) {
-            throw new RuntimeException("Document does not belong to this conversation");
+            throw new ValidationException("Document does not belong to this conversation");
         }
         documentRepository.delete(doc);
     }
@@ -86,6 +88,10 @@ public class DocumentService {
               .append(doc.getFilename()).append("\n");
 
             String text = doc.getExtractedText();
+            if (text == null || text.isEmpty()) {
+                sb.append("(contenu non disponible)\n\n");
+                continue;
+            }
             if (text.length() > maxContentLength) {
                 text = text.substring(0, maxContentLength) + "\n[...contenu tronque]";
             }
