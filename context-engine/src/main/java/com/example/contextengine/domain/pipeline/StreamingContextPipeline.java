@@ -12,6 +12,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Streaming variant of ContextPipeline.
@@ -80,6 +81,56 @@ public class StreamingContextPipeline {
 
             emitStepEvent(emitter, featureName, "done", null, summarizeStep(featureName, context));
             log.info("[STREAMING-PIPELINE] Step '{}' passed", featureName);
+        }
+
+        return ContextAnalysis.continueWith(
+                context.getRewrittenQuery(),
+                context.getWebSearchResults(),
+                context.getWebSearchContext(),
+                context.isAutoWebSearchTriggered(),
+                context.getTokenBudget());
+    }
+
+    /**
+     * Runs only the pipeline steps whose featureName is in allowedSteps.
+     * Other steps are silently skipped. Used by DeepResearchOrchestrator
+     * to run vagueness-detection and query-rewriting without web search.
+     */
+    public ContextAnalysis runStreamingPartial(PipelineContext context, SseEmitter emitter,
+                                                Set<String> allowedSteps) {
+        for (ContextStep step : steps) {
+            String featureName = step.featureName();
+
+            if (!allowedSteps.contains(featureName)) {
+                continue;
+            }
+
+            if (!featureFlagPort.isEnabled(featureName)) {
+                log.debug("[STREAMING-PIPELINE] Skipping '{}' (disabled)", featureName);
+                continue;
+            }
+
+            emitStepEvent(emitter, featureName, "running",
+                    STEP_LABELS.getOrDefault(featureName, featureName), null);
+
+            log.info("[STREAMING-PIPELINE-PARTIAL] Running step '{}'", featureName);
+            StepResult result = step.execute(context);
+
+            if (!result.shouldContinue()) {
+                if (result.getConfidence() < minConfidence && failOpen) {
+                    log.warn("[STREAMING-PIPELINE-PARTIAL] '{}' low confidence, failing open", featureName);
+                    emitStepEvent(emitter, featureName, "skipped", null, "Confiance insuffisante");
+                    continue;
+                }
+
+                emitStepEvent(emitter, featureName, "interrupted", null, result.getMessage());
+                log.info("[STREAMING-PIPELINE-PARTIAL] '{}' interrupted pipeline", featureName);
+                return ContextAnalysis.clarificationNeeded(
+                        result.getMessage(), result.getSuggestions(), result.getConfidence());
+            }
+
+            emitStepEvent(emitter, featureName, "done", null, summarizeStep(featureName, context));
+            log.info("[STREAMING-PIPELINE-PARTIAL] Step '{}' passed", featureName);
         }
 
         return ContextAnalysis.continueWith(

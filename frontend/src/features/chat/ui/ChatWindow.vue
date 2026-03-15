@@ -37,6 +37,7 @@
               <span class="pill pill-llm">Thot</span>
               <span v-if="item.mode === 'think'" class="pill pill-think">Think</span>
               <span v-if="item.mode === 'research'" class="pill pill-research">Research</span>
+              <span v-if="item.mode === 'lab'" class="pill pill-lab">Lab</span>
               <span v-if="item.sources && item.sources.length" class="pill pill-web">Web</span>
               <span v-if="item.autoWebSearchTriggered" class="pill pill-auto">Auto</span>
               <span class="msg-meta">{{ formatDateTime(item.createdAt) }}</span>
@@ -99,41 +100,53 @@
               <span class="pill pill-llm">Thot</span>
               <span v-if="selectedMode === 'think'" class="pill pill-think">Think</span>
               <span v-if="selectedMode === 'research'" class="pill pill-research">Research</span>
+              <span v-if="selectedMode === 'lab'" class="pill pill-lab">Lab</span>
             </div>
 
-            <!-- Research mode: live pipeline steps -->
-            <ThinkingIndicator
-              v-if="selectedMode === 'research'"
-              :visible="true"
-              :sse-steps="stream.steps.value"
-            />
+            <!-- ═══ Lab mode: Perplexity-style accordion ═══ -->
+            <template v-if="selectedMode === 'lab'">
+              <LabAccordion
+                :steps="stream.steps.value"
+                :step-contents="stream.stepContents.value"
+                :all-sources="stream.sources.value"
+              />
+            </template>
 
-            <!-- Research mode: live thinking block (collapsed by default) -->
-            <ThinkingBlock
-              v-if="selectedMode === 'research' && stream.thinking.value"
-              :content="stream.thinking.value"
-              :is-streaming="true"
-              :start-collapsed="true"
-              mode="research"
-            />
+            <!-- ═══ Research mode: existing pipeline + thinking + answer ═══ -->
+            <template v-else-if="selectedMode === 'research'">
+              <ThinkingIndicator
+                :visible="true"
+                :sse-steps="stream.steps.value"
+              />
+              <ThinkingBlock
+                v-if="stream.thinking.value"
+                :content="stream.thinking.value"
+                :is-streaming="true"
+                :start-collapsed="true"
+                mode="research"
+              />
+              <div
+                v-if="stream.answer.value"
+                class="msg-text llm-text md-content"
+                v-html="renderMarkdown(stream.answer.value, stream.sources.value)"
+              ></div>
+              <SourcesFooter v-if="stream.sources.value.length" :sources="stream.sources.value" />
+            </template>
 
-            <!-- Think mode: live thinking block -->
-            <ThinkingBlock
-              v-if="selectedMode === 'think' && stream.thinking.value"
-              :content="stream.thinking.value"
-              :is-streaming="true"
-              mode="think"
-            />
-
-            <!-- Live answer rendering -->
-            <div
-              v-if="stream.answer.value"
-              class="msg-text llm-text md-content"
-              v-html="renderMarkdown(stream.answer.value, stream.sources.value)"
-            ></div>
-
-            <!-- Live sources -->
-            <SourcesFooter v-if="stream.sources.value.length" :sources="stream.sources.value" />
+            <!-- ═══ Think mode: thinking + answer ═══ -->
+            <template v-else-if="selectedMode === 'think'">
+              <ThinkingBlock
+                v-if="stream.thinking.value"
+                :content="stream.thinking.value"
+                :is-streaming="true"
+                mode="think"
+              />
+              <div
+                v-if="stream.answer.value"
+                class="msg-text llm-text md-content"
+                v-html="renderMarkdown(stream.answer.value, stream.sources.value)"
+              ></div>
+            </template>
           </div>
         </div>
       </template>
@@ -225,6 +238,7 @@ import DocumentAttachment from '../../document/ui/DocumentAttachment.vue'
 import ThinkingIndicator from './ThinkingIndicator.vue'
 import ThinkingBlock from './ThinkingBlock.vue'
 import SourcesFooter from './SourcesFooter.vue'
+import LabAccordion from './LabAccordion.vue'
 
 const props = defineProps({ conversationId: { type: Number, required: true } })
 
@@ -250,7 +264,8 @@ const streamingPrompt = ref('')
 const modes = [
   { id: 'standard', label: 'Standard' },
   { id: 'think', label: 'Think' },
-  { id: 'research', label: 'Research' }
+  { id: 'research', label: 'Research' },
+  { id: 'lab', label: 'Lab' }
 ]
 
 const isBusy = computed(() => sending.value || stream.streaming.value)
@@ -292,7 +307,9 @@ watch(() => stream.doneData.value, async (data) => {
       thinking: data.thinking || stream.thinking.value || null,
       sources: effectiveSources,
       mode: selectedMode.value,
-      steps: selectedMode.value === 'research' ? [...stream.steps.value] : null,
+      steps: (selectedMode.value === 'research' || selectedMode.value === 'lab')
+        ? stream.steps.value.map(s => s.status === 'running' ? { ...s, status: 'done' } : s)
+        : null,
       autoWebSearchTriggered: data.autoWebSearchTriggered || false,
       createdAt: new Date().toISOString()
     })
@@ -623,6 +640,14 @@ onMounted(() => {
   background: none;
   border: 1px solid var(--accent-pop, #3DCAAD);
   color: var(--accent-pop, #3DCAAD);
+  font-size: 0.55rem;
+  padding: 0.2rem 0.6rem;
+}
+
+.pill-lab {
+  background: none;
+  border: 1px solid #F59E0B;
+  color: #F59E0B;
   font-size: 0.55rem;
   padding: 0.2rem 0.6rem;
 }
@@ -1024,6 +1049,13 @@ onMounted(() => {
   font-weight: 600;
 }
 
+/* Lab mode active — amber */
+.mode-btn.active[data-mode="lab"] {
+  background: #F59E0B;
+  color: #FFF;
+  font-weight: 600;
+}
+
 .mode-btn:hover:not(.active):not(:disabled) {
   color: var(--text);
   background: rgba(0, 0, 0, 0.03);
@@ -1035,6 +1067,10 @@ onMounted(() => {
 
 .mode-btn[data-mode="research"]:hover:not(.active):not(:disabled) {
   color: var(--accent-pop);
+}
+
+.mode-btn[data-mode="lab"]:hover:not(.active):not(:disabled) {
+  color: #F59E0B;
 }
 
 .mode-btn:disabled {

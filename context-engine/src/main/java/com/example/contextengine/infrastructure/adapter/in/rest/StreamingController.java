@@ -1,14 +1,10 @@
 package com.example.contextengine.infrastructure.adapter.in.rest;
 
-import com.example.contextengine.domain.model.ContextAnalysis;
+import com.example.contextengine.application.service.DeepResearchOrchestrator;
+import com.example.contextengine.application.service.LabOrchestrator;
 import com.example.contextengine.domain.model.ConversationMessage;
 import com.example.contextengine.domain.model.SearchResult;
-import com.example.contextengine.domain.pipeline.PipelineContext;
-import com.example.contextengine.domain.pipeline.StreamingContextPipeline;
-import com.example.contextengine.domain.port.out.LlmPort;
 import com.example.contextengine.domain.port.out.StreamingLlmPort;
-import com.example.contextengine.domain.port.out.WebSearchPort;
-import com.example.contextengine.infrastructure.config.ContextEngineProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,27 +24,21 @@ import java.util.concurrent.Executor;
 public class StreamingController {
 
     private static final Logger log = LoggerFactory.getLogger(StreamingController.class);
-    private static final long SSE_TIMEOUT = 120_000L;
+    private static final long SSE_TIMEOUT = 600_000L;
 
     private final StreamingLlmPort streamingLlmPort;
-    private final LlmPort llmPort;
-    private final WebSearchPort webSearchPort;
-    private final StreamingContextPipeline streamingPipeline;
-    private final ContextEngineProperties properties;
+    private final DeepResearchOrchestrator deepResearchOrchestrator;
+    private final LabOrchestrator labOrchestrator;
     private final Executor streamingExecutor;
     private final ObjectMapper mapper = new ObjectMapper();
 
     public StreamingController(StreamingLlmPort streamingLlmPort,
-                               LlmPort llmPort,
-                               WebSearchPort webSearchPort,
-                               StreamingContextPipeline streamingPipeline,
-                               ContextEngineProperties properties,
+                               DeepResearchOrchestrator deepResearchOrchestrator,
+                               LabOrchestrator labOrchestrator,
                                @Qualifier("streamingExecutor") Executor streamingExecutor) {
         this.streamingLlmPort = streamingLlmPort;
-        this.llmPort = llmPort;
-        this.webSearchPort = webSearchPort;
-        this.streamingPipeline = streamingPipeline;
-        this.properties = properties;
+        this.deepResearchOrchestrator = deepResearchOrchestrator;
+        this.labOrchestrator = labOrchestrator;
         this.streamingExecutor = streamingExecutor;
     }
 
@@ -123,71 +113,38 @@ public class StreamingController {
 
         streamingExecutor.execute(() -> {
             try {
-                // 1. Run streaming pipeline (emits step events) — with real conversation history
-                PipelineContext context = new PipelineContext(
-                        prompt, conversationHistory, documentContext,
-                        webSearchRequested, llmPort, webSearchPort,
-                        properties.getMaxContextTokens());
-
-                ContextAnalysis analysis = streamingPipeline.runStreaming(context, emitter);
-
-                // 2. If clarification needed, emit and stop
-                if (!analysis.isContinue()) {
-                    String clarificationPayload = buildClarificationPayload(
-                            analysis.getClarificationMessage(), analysis.getSuggestions());
-                    sendEvent(emitter, "clarification", clarificationPayload);
-                    emitter.complete();
-                    return;
-                }
-
-                // 3. Emit sources if web search produced results
-                if (analysis.getWebSearchResults() != null && !analysis.getWebSearchResults().isEmpty()) {
-                    String sourcesPayload = buildSourcesPayload(analysis.getWebSearchResults());
-                    sendEvent(emitter, "sources", sourcesPayload);
-                }
-
-                // 4. Stream LLM synthesis
-                String effectivePrompt = analysis.getRewrittenQuery() != null
-                        ? analysis.getRewrittenQuery() : prompt;
-                String systemPrompt = buildResearchSystemPrompt(baseSystemPrompt, documentContext, analysis.getWebSearchContext());
-
-                sendEvent(emitter, "step",
-                        "{\"stepId\":\"synthesis\",\"status\":\"running\",\"label\":\"Synthese en cours...\"}");
-
-                StringBuilder answerAccumulator = new StringBuilder();
-                StringBuilder thinkingAccumulator = new StringBuilder();
-
-                streamingLlmPort.streamThinkAndAnswer(
-                        systemPrompt, effectivePrompt, conversationHistory,
-                        thinking -> {
-                            thinkingAccumulator.append(thinking.content());
-                            sendEvent(emitter, "thinking", "{\"content\":" + quote(thinking.content()) + "}");
-                        },
-                        chunk -> {
-                            answerAccumulator.append(chunk.content());
-                            sendEvent(emitter, "answer", "{\"content\":" + quote(chunk.content()) + "}");
-                        },
-                        error -> {
-                            log.error("[STREAM-RESEARCH] LLM error: {}", error.getMessage());
-                            sendEvent(emitter, "error", "{\"message\":" + quote(error.getMessage()) + "}");
-                            emitter.complete();
-                        },
-                        () -> {
-                            sendEvent(emitter, "step",
-                                    "{\"stepId\":\"synthesis\",\"status\":\"done\",\"detail\":\"Synthese terminee\"}");
-
-                            String donePayload = buildDonePayload(
-                                    answerAccumulator.toString(),
-                                    thinkingAccumulator.toString(),
-                                    analysis.getWebSearchResults() != null ? analysis.getWebSearchResults() : List.of(),
-                                    analysis.isAutoWebSearchTriggered());
-                            sendEvent(emitter, "done", donePayload);
-                            emitter.complete();
-                            log.info("[STREAM-RESEARCH] Stream completed");
-                        }
-                );
+                deepResearchOrchestrator.orchestrate(
+                        prompt, baseSystemPrompt, conversationHistory,
+                        documentContext, webSearchRequested, emitter);
             } catch (Exception e) {
                 log.error("[STREAM-RESEARCH] Unexpected error: {}", e.getMessage(), e);
+                sendEvent(emitter, "error", "{\"message\":" + quote(e.getMessage()) + "}");
+                emitter.complete();
+            }
+        });
+
+        return emitter;
+    }
+
+    /**
+     * Lab mode: research + multi-section document writing.
+     */
+    @PostMapping(value = "/api/stream/lab", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter streamLab(@RequestBody Map<String, Object> body) {
+        String prompt = (String) body.get("prompt");
+        String documentContext = (String) body.get("documentContext");
+        String baseSystemPrompt = (String) body.get("systemPrompt");
+        List<ConversationMessage> conversationHistory = extractConversationHistory(body);
+        SseEmitter emitter = new SseEmitter(SSE_TIMEOUT);
+        log.info("[STREAM-LAB] Starting lab stream for prompt: {}", prompt);
+
+        streamingExecutor.execute(() -> {
+            try {
+                labOrchestrator.orchestrate(
+                        prompt, baseSystemPrompt, conversationHistory,
+                        documentContext, emitter);
+            } catch (Exception e) {
+                log.error("[STREAM-LAB] Unexpected error: {}", e.getMessage(), e);
                 sendEvent(emitter, "error", "{\"message\":" + quote(e.getMessage()) + "}");
                 emitter.complete();
             }
@@ -239,33 +196,6 @@ public class StreamingController {
         return sb.toString();
     }
 
-    private String buildResearchSystemPrompt(String baseSystemPrompt, String documentContext, String webSearchContext) {
-        StringBuilder sb = new StringBuilder();
-        if (baseSystemPrompt != null && !baseSystemPrompt.isBlank()) {
-            sb.append(baseSystemPrompt);
-        } else {
-            sb.append("Tu es un assistant de recherche.");
-        }
-        if (documentContext != null && !documentContext.isBlank()) {
-            sb.append("\n\n## Documents attaches\n");
-            sb.append("Utilise leur contenu pour repondre aux questions.\n\n");
-            sb.append(documentContext);
-        }
-        if (webSearchContext != null && !webSearchContext.isBlank()) {
-            sb.append("\n\n## Mode recherche web\n");
-            sb.append("Reponds en te basant UNIQUEMENT sur les sources fournies ci-dessous.\n\n");
-            sb.append("Regles strictes :\n");
-            sb.append("- Cite tes sources avec [1], [2], etc. correspondant EXACTEMENT aux numeros ci-dessous.\n");
-            sb.append("- N'invente AUCUN numero de source qui n'existe pas dans la liste.\n");
-            sb.append("- Si les sources ne couvrent pas un point, dis-le clairement.\n");
-            sb.append("- A la fin, ajoute une section 'Sources :' listant les URLs citees.\n\n");
-            sb.append("Sources :\n").append(webSearchContext);
-        } else {
-            sb.append("\n\nSynthetise les informations trouvees et fournis une reponse precise.");
-        }
-        return sb.toString();
-    }
-
     private String buildDonePayload(String response, String thinking,
                                      List<SearchResult> sources, boolean autoWebSearchTriggered) {
         try {
@@ -283,34 +213,6 @@ public class StreamingController {
             return mapper.writeValueAsString(node);
         } catch (Exception e) {
             return "{\"response\":" + quote(response) + ",\"sources\":[]}";
-        }
-    }
-
-    private String buildSourcesPayload(List<SearchResult> sources) {
-        try {
-            var node = mapper.createObjectNode();
-            var sourcesArray = node.putArray("sources");
-            for (SearchResult s : sources) {
-                var sourceNode = sourcesArray.addObject();
-                sourceNode.put("citationId", s.citationId());
-                sourceNode.put("sourceUrl", s.sourceUrl());
-                sourceNode.put("sourceTitle", s.sourceTitle());
-            }
-            return mapper.writeValueAsString(node);
-        } catch (Exception e) {
-            return "{\"sources\":[]}";
-        }
-    }
-
-    private String buildClarificationPayload(String message, List<String> suggestions) {
-        try {
-            var node = mapper.createObjectNode();
-            node.put("message", message);
-            var sugArray = node.putArray("suggestions");
-            if (suggestions != null) suggestions.forEach(sugArray::add);
-            return mapper.writeValueAsString(node);
-        } catch (Exception e) {
-            return "{\"message\":" + quote(message) + "}";
         }
     }
 

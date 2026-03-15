@@ -7,7 +7,7 @@
       <svg class="thinking-icon" :class="{ rotated: !isCollapsed }" width="8" height="8" viewBox="0 0 8 8" fill="currentColor">
         <polygon points="1,0 7,4 1,8" />
       </svg>
-      <span class="thinking-title">{{ mode === 'research' ? 'Analyse' : 'Raisonnement' }}</span>
+      <span class="thinking-title">{{ (mode === 'research' || mode === 'lab') ? 'Analyse' : 'Raisonnement' }}</span>
       <span v-if="isStreaming" class="thinking-badge streaming-badge">en cours</span>
       <span v-else class="thinking-badge done-badge">{{ formatTokens(tokenCount) }}</span>
     </button>
@@ -181,6 +181,30 @@ function toggleCollapse() {
 
 .mode-research .thinking-cursor {
   color: var(--accent-pop);
+}
+
+/* Lab mode: amber accent */
+.thinking-block.mode-lab.streaming {
+  border-color: #F59E0B;
+  border-left: 3px solid #F59E0B;
+}
+
+.thinking-block:not(.streaming).mode-lab {
+  border-left: 3px solid rgba(245, 158, 11, 0.3);
+}
+
+.mode-lab .thinking-title {
+  color: #F59E0B;
+}
+
+.mode-lab .streaming-badge {
+  background: rgba(245, 158, 11, 0.12);
+  color: #F59E0B;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.mode-lab .thinking-cursor {
+  color: #F59E0B;
 }
 
 @keyframes blink {

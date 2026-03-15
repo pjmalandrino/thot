@@ -31,7 +31,7 @@ import java.util.concurrent.Executors;
 public class ConversationController {
 
     private static final Logger log = LoggerFactory.getLogger(ConversationController.class);
-    private static final long SSE_TIMEOUT = 120_000L;
+    private static final long SSE_TIMEOUT = 600_000L;
 
     private final ConversationService conversationService;
     private final StreamingContextEngineClient streamingClient;
@@ -85,7 +85,11 @@ public class ConversationController {
                 String documentContext = conversationService.getDocumentContext(id);
                 String baseSystemPrompt = conversationService.getBaseSystemPrompt(id);
                 var history = conversationService.buildRecentHistory(id);
-                String endpoint = "think".equals(mode) ? "/api/stream/think" : "/api/stream/research";
+                String endpoint = switch (mode) {
+                    case "think" -> "/api/stream/think";
+                    case "lab" -> "/api/stream/lab";
+                    default -> "/api/stream/research";
+                };
 
                 Map<String, Object> params = new LinkedHashMap<>();
                 params.put("prompt", prompt);
