@@ -780,17 +780,26 @@ onMounted(() => {
 /* ══════════════════════════════════════
    TABLE
    ══════════════════════════════════════ */
-.md-content :deep(table) {
-  width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-  margin: 1.5rem 0;
-  font-size: 0.82rem;
-  line-height: 1.5;
-  display: block;
+.md-content :deep(.table-wrapper) {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  margin: 1.5rem auto;
   border: 1px solid var(--border);
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.md-content :deep(.table-wrapper table),
+.md-content :deep(table) {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.md-content :deep(.table-wrapper table) {
+  border: none;
+  margin: 0;
 }
 
 .md-content :deep(thead) {
@@ -808,8 +817,6 @@ onMounted(() => {
   color: var(--accent);
   border-bottom: 2px solid var(--accent);
   white-space: nowrap;
-  position: sticky;
-  top: 0;
 }
 
 .md-content :deep(th:not(:last-child)) {

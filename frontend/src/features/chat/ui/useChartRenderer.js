@@ -21,6 +21,27 @@ function unescapeHtml(str) {
     .replace(/&gt;/g, '>')
 }
 
+// ── Deep merge utility ─────────────────────────────────────────────────────
+
+/**
+ * Deep merge two objects. `target` provides defaults, `source` overrides.
+ * Arrays and non-plain-objects are replaced, not merged.
+ */
+function deepMerge(target, source) {
+  const result = { ...target }
+  for (const key of Object.keys(source)) {
+    if (
+      source[key] && typeof source[key] === 'object' && !Array.isArray(source[key]) &&
+      target[key] && typeof target[key] === 'object' && !Array.isArray(target[key])
+    ) {
+      result[key] = deepMerge(target[key], source[key])
+    } else {
+      result[key] = source[key]
+    }
+  }
+  return result
+}
+
 // ── Spec normalization ──────────────────────────────────────────────────────
 
 /**
@@ -30,34 +51,135 @@ function unescapeHtml(str) {
  *   - Simplified:   { type: "bar", data: { x, y, ... }, layout: {...} }
  */
 function normalizeSpec(spec) {
+  let data, layout
+
   if (spec.data && Array.isArray(spec.data)) {
-    return { data: spec.data, layout: spec.layout || {} }
+    data = spec.data
+    layout = spec.layout || {}
+  } else if (spec.type && spec.data) {
+    data = [{ type: spec.type, ...spec.data }]
+    layout = spec.layout || {}
+  } else {
+    throw new Error('Format invalide : attendu { data, layout } ou { type, data, layout }')
   }
 
-  if (spec.type && spec.data) {
-    const trace = {
-      type: spec.type,
-      ...spec.data
+  // ── Clean up generic trace names ──────────────────────────────────────
+  const genericNamePattern = /^trace\s*\d+$/i
+  let hasExplicitNames = false
+
+  for (const trace of data) {
+    if (trace.name && !genericNamePattern.test(trace.name)) {
+      hasExplicitNames = true
     }
-    return { data: [trace], layout: spec.layout || {} }
+    // Remove generic "trace 0", "trace 1" names
+    if (trace.name && genericNamePattern.test(trace.name)) {
+      delete trace.name
+    }
   }
 
-  throw new Error('Format invalide : attendu { data, layout } ou { type, data, layout }')
+  // If single trace with no meaningful name → hide legend
+  if (data.length === 1 && !hasExplicitNames && layout.showlegend === undefined) {
+    layout.showlegend = false
+  }
+
+  // ── Apply THOT colors to traces without explicit colors ───────────────
+  for (let i = 0; i < data.length; i++) {
+    const trace = data[i]
+    const color = THOT_PALETTE[i % THOT_PALETTE.length]
+
+    if (trace.type === 'pie') {
+      // Pie charts use marker.colors (array), only set if not provided
+      if (!trace.marker?.colors) {
+        trace.marker = { ...trace.marker, colors: THOT_PALETTE.slice(0, (trace.labels || trace.values || []).length || THOT_PALETTE.length) }
+      }
+    } else if (trace.type === 'heatmap') {
+      // Heatmaps use colorscale — apply THOT-inspired scale if not set
+      if (!trace.colorscale) {
+        trace.colorscale = [
+          [0, '#F5F0E8'],
+          [0.5, '#D4A438'],
+          [1, '#141210']
+        ]
+      }
+    } else {
+      // Bar, scatter, line, histogram — apply marker/line color if not set
+      if (!trace.marker?.color && !trace.line?.color) {
+        if (trace.type === 'scatter' || trace.type === 'line' ||
+            (trace.mode && trace.mode.includes('lines'))) {
+          trace.line = { ...trace.line, color, width: 2 }
+          trace.marker = { ...trace.marker, color, size: 6 }
+        } else {
+          trace.marker = { ...trace.marker, color }
+        }
+      }
+    }
+  }
+
+  return { data, layout }
 }
 
-// ── THOT design defaults ────────────────────────────────────────────────────
+// ── THOT design system ──────────────────────────────────────────────────────
+
+const THOT_PALETTE = [
+  '#D4A438', // amber (brand)
+  '#3DCAAD', // teal (accent pop)
+  '#8B5CF6', // violet
+  '#E85D4A', // coral
+  '#6366F1', // indigo
+  '#10B981', // emerald
+  '#F59E0B', // warm amber
+  '#64748B', // slate
+]
 
 const THOT_LAYOUT = {
-  font: { family: 'Inter, sans-serif', color: '#141210' },
+  font: { family: 'Inter, sans-serif', size: 12, color: '#4A4740' },
   paper_bgcolor: 'transparent',
   plot_bgcolor: 'transparent',
-  margin: { t: 40, r: 20, b: 40, l: 50 }
+  margin: { t: 48, r: 24, b: 56, l: 56 },
+  title: {
+    font: { family: 'Inter, sans-serif', size: 14, color: '#141210' },
+    x: 0,
+    xanchor: 'left',
+    pad: { l: 8 },
+  },
+  xaxis: {
+    gridcolor: 'rgba(0,0,0,0.05)',
+    linecolor: 'rgba(0,0,0,0.08)',
+    tickfont: { family: "'IBM Plex Mono', monospace", size: 10, color: '#8C877D' },
+    title: { font: { family: 'Inter, sans-serif', size: 11, color: '#8C877D' } },
+    zeroline: false,
+    showgrid: true,
+  },
+  yaxis: {
+    gridcolor: 'rgba(0,0,0,0.05)',
+    linecolor: 'rgba(0,0,0,0.08)',
+    tickfont: { family: "'IBM Plex Mono', monospace", size: 10, color: '#8C877D' },
+    title: { font: { family: 'Inter, sans-serif', size: 11, color: '#8C877D' } },
+    zeroline: false,
+    showgrid: true,
+  },
+  legend: {
+    font: { family: "'IBM Plex Mono', monospace", size: 10, color: '#4A4740' },
+    bgcolor: 'transparent',
+    orientation: 'h',
+    y: -0.18,
+    x: 0.5,
+    xanchor: 'center',
+  },
+  colorway: THOT_PALETTE,
+  hoverlabel: {
+    bgcolor: '#141210',
+    font: { family: 'Inter, sans-serif', size: 12, color: '#FFFFFF' },
+    bordercolor: 'transparent',
+  },
+  bargap: 0.3,
+  bargroupgap: 0.08,
 }
 
 const THOT_CONFIG = {
   responsive: true,
   displaylogo: false,
-  modeBarButtonsToRemove: ['sendDataToCloud', 'lasso2d', 'select2d']
+  displayModeBar: false,
 }
 
 // ── Composable ──────────────────────────────────────────────────────────────
@@ -90,8 +212,8 @@ export function useChartRenderer(containerRef, interactions) {
         const spec = JSON.parse(rawJson)
         const { data, layout } = normalizeSpec(spec)
 
-        // Merge THOT defaults with spec layout (spec wins on conflicts)
-        const mergedLayout = { ...THOT_LAYOUT, ...layout }
+        // Deep merge THOT defaults with spec layout (spec wins on conflicts)
+        const mergedLayout = deepMerge(THOT_LAYOUT, layout)
 
         // Clear loading indicator and render
         el.innerHTML = ''
