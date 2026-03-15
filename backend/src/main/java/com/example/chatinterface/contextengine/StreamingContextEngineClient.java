@@ -1,5 +1,6 @@
 package com.example.chatinterface.contextengine;
 
+import com.example.chatinterface.shared.exception.ServiceException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -67,7 +68,7 @@ public class StreamingContextEngineClient {
 
             if (response.statusCode() != 200) {
                 String errorBody = new String(response.body().readAllBytes(), StandardCharsets.UTF_8);
-                throw new RuntimeException("Context Engine returned " + response.statusCode() + ": " + errorBody);
+                throw new ServiceException("Context Engine returned " + response.statusCode() + ": " + errorBody);
             }
 
             try (BufferedReader reader = new BufferedReader(

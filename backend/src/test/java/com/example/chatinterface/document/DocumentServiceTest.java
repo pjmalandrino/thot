@@ -169,6 +169,21 @@ class DocumentServiceTest {
         }
 
         @Test
+        @DisplayName("affiche placeholder si extractedText est null")
+        void nullExtractedText() {
+            Document doc = new Document(conversation, "scan.pdf", "application/pdf", 2, 0, null);
+            when(documentRepository.findByConversationIdOrderByUploadedAtAsc(10L))
+                    .thenReturn(List.of(doc));
+
+            String result = documentService.buildDocumentContext(10L);
+
+            assertThat(result)
+                    .contains("### Document 1 : scan.pdf")
+                    .contains("(contenu non disponible)")
+                    .doesNotContain("null");
+        }
+
+        @Test
         @DisplayName("tronque le contenu au-dela de maxContentLength")
         void truncatesLongContent() {
             String longText = "x".repeat(1000);

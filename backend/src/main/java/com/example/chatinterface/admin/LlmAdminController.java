@@ -1,5 +1,6 @@
 package com.example.chatinterface.admin;
 
+import com.example.chatinterface.shared.exception.ResourceNotFoundException;
 import com.example.chatinterface.llm.LlmGatewayFactory;
 import com.example.chatinterface.llm.LlmModel;
 import com.example.chatinterface.llm.LlmModelRepository;
@@ -61,7 +62,7 @@ public class LlmAdminController {
     @PutMapping("/providers/{id}")
     public ProviderResponse updateProvider(@PathVariable Long id, @RequestBody ProviderRequest request) {
         LlmProvider p = providerRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Provider not found: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Provider", id));
 
         if (request.getName() != null) p.setName(request.getName());
         if (request.getType() != null) p.setType(request.getType());
@@ -95,7 +96,7 @@ public class LlmAdminController {
     @ResponseStatus(HttpStatus.CREATED)
     public ModelResponse addModel(@PathVariable Long id, @RequestBody ModelRequest request) {
         LlmProvider provider = providerRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Provider not found: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Provider", id));
 
         LlmModel model = new LlmModel();
         model.setProvider(provider);
@@ -108,7 +109,7 @@ public class LlmAdminController {
     @PutMapping("/models/{id}")
     public ModelResponse updateModel(@PathVariable Long id, @RequestBody ModelRequest request) {
         LlmModel model = modelRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Model not found: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Model", id));
 
         if (request.getModelName() != null) model.setModelName(request.getModelName());
         if (request.getDisplayName() != null) model.setDisplayName(request.getDisplayName());

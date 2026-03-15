@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -23,8 +24,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.Executor;
 
 @RestController
 @RequestMapping("/api/conversations")
@@ -35,13 +35,15 @@ public class ConversationController {
 
     private final ConversationService conversationService;
     private final StreamingContextEngineClient streamingClient;
-    private final ExecutorService streamExecutor = Executors.newCachedThreadPool();
+    private final Executor streamExecutor;
     private final ObjectMapper mapper = new ObjectMapper();
 
     public ConversationController(ConversationService conversationService,
-                                   StreamingContextEngineClient streamingClient) {
+                                   StreamingContextEngineClient streamingClient,
+                                   @Qualifier("streamingExecutor") Executor streamExecutor) {
         this.conversationService = conversationService;
         this.streamingClient = streamingClient;
+        this.streamExecutor = streamExecutor;
     }
 
     @GetMapping

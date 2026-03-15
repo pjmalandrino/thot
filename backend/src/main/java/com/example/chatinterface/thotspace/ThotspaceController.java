@@ -1,5 +1,6 @@
 package com.example.chatinterface.thotspace;
 
+import com.example.chatinterface.shared.exception.ResourceNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -48,7 +49,7 @@ public class ThotspaceController {
     @PutMapping("/{id}")
     public ThotspaceResponse update(@PathVariable Long id, @RequestBody ThotspaceRequest request) {
         Thotspace space = thotspaceRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Thotspace not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Thotspace", id));
         if (request.getName() != null) space.setName(request.getName());
         if (request.getDescription() != null) space.setDescription(request.getDescription());
         if (request.getSystemPrompt() != null) space.setSystemPrompt(request.getSystemPrompt());
@@ -60,12 +61,12 @@ public class ThotspaceController {
     @Transactional
     public void delete(@PathVariable Long id) {
         Thotspace space = thotspaceRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Thotspace not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Thotspace", id));
         if (space.isDefault()) {
             throw new IllegalStateException("Cannot delete the default thotspace");
         }
         Thotspace defaultSpace = thotspaceRepository.findByIsDefaultTrue()
-                .orElseThrow(() -> new RuntimeException("Default thotspace not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Default thotspace not found"));
         conversationRepository.reassignThotspace(id, defaultSpace.getId());
         thotspaceRepository.delete(space);
     }

@@ -3,9 +3,9 @@ package com.example.contextengine.infrastructure.adapter.in.rest;
 import com.example.contextengine.application.service.DeepResearchOrchestrator;
 import com.example.contextengine.application.service.LabOrchestrator;
 import com.example.contextengine.domain.model.ConversationMessage;
-import com.example.contextengine.domain.model.SearchResult;
+import com.example.contextengine.application.support.SseEmitterHelper;
 import com.example.contextengine.domain.port.out.StreamingLlmPort;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.example.contextengine.infrastructure.adapter.in.rest.dto.StreamingRequestDto;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -15,9 +15,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-import java.io.IOException;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.Executor;
 
 @RestController
@@ -30,16 +28,18 @@ public class StreamingController {
     private final DeepResearchOrchestrator deepResearchOrchestrator;
     private final LabOrchestrator labOrchestrator;
     private final Executor streamingExecutor;
-    private final ObjectMapper mapper = new ObjectMapper();
+    private final SseEmitterHelper sseHelper;
 
     public StreamingController(StreamingLlmPort streamingLlmPort,
                                DeepResearchOrchestrator deepResearchOrchestrator,
                                LabOrchestrator labOrchestrator,
-                               @Qualifier("streamingExecutor") Executor streamingExecutor) {
+                               @Qualifier("streamingExecutor") Executor streamingExecutor,
+                               SseEmitterHelper sseHelper) {
         this.streamingLlmPort = streamingLlmPort;
         this.deepResearchOrchestrator = deepResearchOrchestrator;
         this.labOrchestrator = labOrchestrator;
         this.streamingExecutor = streamingExecutor;
+        this.sseHelper = sseHelper;
     }
 
     /**
@@ -47,11 +47,11 @@ public class StreamingController {
      * No pipeline steps — just raw reasoning + answer.
      */
     @PostMapping(value = "/api/stream/think", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter streamThink(@RequestBody Map<String, Object> body) {
-        String prompt = (String) body.get("prompt");
-        String documentContext = (String) body.get("documentContext");
-        String baseSystemPrompt = (String) body.get("systemPrompt");
-        List<ConversationMessage> conversationHistory = extractConversationHistory(body);
+    public SseEmitter streamThink(@RequestBody StreamingRequestDto request) {
+        String prompt = request.prompt();
+        String documentContext = request.documentContext();
+        String baseSystemPrompt = request.systemPrompt();
+        List<ConversationMessage> conversationHistory = request.toDomainHistory();
         SseEmitter emitter = new SseEmitter(SSE_TIMEOUT);
         log.info("[STREAM-THINK] Starting think stream for prompt: {}", prompt);
 
@@ -66,30 +66,30 @@ public class StreamingController {
                         systemPrompt, prompt, conversationHistory,
                         chunk -> {
                             thinkingAccumulator.append(chunk.content());
-                            sendEvent(emitter, "thinking", "{\"content\":" + quote(chunk.content()) + "}");
+                            sseHelper.sendEvent(emitter, "thinking", "{\"content\":" + sseHelper.quote(chunk.content()) + "}");
                         },
                         chunk -> {
                             answerAccumulator.append(chunk.content());
-                            sendEvent(emitter, "answer", "{\"content\":" + quote(chunk.content()) + "}");
+                            sseHelper.sendEvent(emitter, "answer", "{\"content\":" + sseHelper.quote(chunk.content()) + "}");
                         },
                         error -> {
                             log.error("[STREAM-THINK] Error: {}", error.getMessage());
-                            sendEvent(emitter, "error", "{\"message\":" + quote(error.getMessage()) + "}");
+                            sseHelper.sendEvent(emitter, "error", "{\"message\":" + sseHelper.quote(error.getMessage()) + "}");
                             emitter.complete();
                         },
                         () -> {
-                            String donePayload = buildDonePayload(
+                            String donePayload = sseHelper.buildDonePayload(
                                     answerAccumulator.toString(),
                                     thinkingAccumulator.toString(),
                                     List.of(), false);
-                            sendEvent(emitter, "done", donePayload);
+                            sseHelper.sendEvent(emitter, "done", donePayload);
                             emitter.complete();
                             log.info("[STREAM-THINK] Stream completed");
                         }
                 );
             } catch (Exception e) {
                 log.error("[STREAM-THINK] Unexpected error: {}", e.getMessage(), e);
-                sendEvent(emitter, "error", "{\"message\":" + quote(e.getMessage()) + "}");
+                sseHelper.sendEvent(emitter, "error", "{\"message\":" + sseHelper.quote(e.getMessage()) + "}");
                 emitter.complete();
             }
         });
@@ -102,12 +102,12 @@ public class StreamingController {
      * Runs the full context pipeline, emitting step events, then streams the LLM synthesis.
      */
     @PostMapping(value = "/api/stream/research", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter streamResearch(@RequestBody Map<String, Object> body) {
-        String prompt = (String) body.get("prompt");
-        String documentContext = (String) body.get("documentContext");
-        String baseSystemPrompt = (String) body.get("systemPrompt");
-        boolean webSearchRequested = Boolean.parseBoolean(String.valueOf(body.getOrDefault("webSearchRequested", "false")));
-        List<ConversationMessage> conversationHistory = extractConversationHistory(body);
+    public SseEmitter streamResearch(@RequestBody StreamingRequestDto request) {
+        String prompt = request.prompt();
+        String documentContext = request.documentContext();
+        String baseSystemPrompt = request.systemPrompt();
+        boolean webSearchRequested = request.isWebSearchRequestedOrDefault();
+        List<ConversationMessage> conversationHistory = request.toDomainHistory();
         SseEmitter emitter = new SseEmitter(SSE_TIMEOUT);
         log.info("[STREAM-RESEARCH] Starting research stream for prompt: {}", prompt);
 
@@ -118,7 +118,7 @@ public class StreamingController {
                         documentContext, webSearchRequested, emitter);
             } catch (Exception e) {
                 log.error("[STREAM-RESEARCH] Unexpected error: {}", e.getMessage(), e);
-                sendEvent(emitter, "error", "{\"message\":" + quote(e.getMessage()) + "}");
+                sseHelper.sendEvent(emitter, "error", "{\"message\":" + sseHelper.quote(e.getMessage()) + "}");
                 emitter.complete();
             }
         });
@@ -130,11 +130,11 @@ public class StreamingController {
      * Lab mode: research + multi-section document writing.
      */
     @PostMapping(value = "/api/stream/lab", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter streamLab(@RequestBody Map<String, Object> body) {
-        String prompt = (String) body.get("prompt");
-        String documentContext = (String) body.get("documentContext");
-        String baseSystemPrompt = (String) body.get("systemPrompt");
-        List<ConversationMessage> conversationHistory = extractConversationHistory(body);
+    public SseEmitter streamLab(@RequestBody StreamingRequestDto request) {
+        String prompt = request.prompt();
+        String documentContext = request.documentContext();
+        String baseSystemPrompt = request.systemPrompt();
+        List<ConversationMessage> conversationHistory = request.toDomainHistory();
         SseEmitter emitter = new SseEmitter(SSE_TIMEOUT);
         log.info("[STREAM-LAB] Starting lab stream for prompt: {}", prompt);
 
@@ -145,7 +145,7 @@ public class StreamingController {
                         documentContext, emitter);
             } catch (Exception e) {
                 log.error("[STREAM-LAB] Unexpected error: {}", e.getMessage(), e);
-                sendEvent(emitter, "error", "{\"message\":" + quote(e.getMessage()) + "}");
+                sseHelper.sendEvent(emitter, "error", "{\"message\":" + sseHelper.quote(e.getMessage()) + "}");
                 emitter.complete();
             }
         });
@@ -154,32 +154,6 @@ public class StreamingController {
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────────
-
-    @SuppressWarnings("unchecked")
-    private List<ConversationMessage> extractConversationHistory(Map<String, Object> body) {
-        Object historyObj = body.get("conversationHistory");
-        if (historyObj == null) return List.of();
-        if (historyObj instanceof List<?> list) {
-            return list.stream()
-                    .filter(item -> item instanceof Map)
-                    .map(item -> {
-                        Map<String, Object> map = (Map<String, Object>) item;
-                        return new ConversationMessage(
-                                String.valueOf(map.get("role")),
-                                String.valueOf(map.get("content")));
-                    })
-                    .toList();
-        }
-        return List.of();
-    }
-
-    private void sendEvent(SseEmitter emitter, String eventName, String data) {
-        try {
-            emitter.send(SseEmitter.event().name(eventName).data(data));
-        } catch (IOException e) {
-            log.warn("[STREAM] Failed to send event '{}': {}", eventName, e.getMessage());
-        }
-    }
 
     private String buildThinkSystemPrompt(String baseSystemPrompt, String documentContext) {
         StringBuilder sb = new StringBuilder();
@@ -196,32 +170,4 @@ public class StreamingController {
         return sb.toString();
     }
 
-    private String buildDonePayload(String response, String thinking,
-                                     List<SearchResult> sources, boolean autoWebSearchTriggered) {
-        try {
-            var node = mapper.createObjectNode();
-            node.put("response", response);
-            if (thinking != null && !thinking.isBlank()) node.put("thinking", thinking);
-            node.put("autoWebSearchTriggered", autoWebSearchTriggered);
-            var sourcesArray = node.putArray("sources");
-            for (SearchResult s : sources) {
-                var sourceNode = sourcesArray.addObject();
-                sourceNode.put("citationId", s.citationId());
-                sourceNode.put("sourceUrl", s.sourceUrl());
-                sourceNode.put("sourceTitle", s.sourceTitle());
-            }
-            return mapper.writeValueAsString(node);
-        } catch (Exception e) {
-            return "{\"response\":" + quote(response) + ",\"sources\":[]}";
-        }
-    }
-
-    private String quote(String s) {
-        if (s == null) return "null";
-        return "\"" + s.replace("\\", "\\\\")
-                       .replace("\"", "\\\"")
-                       .replace("\n", "\\n")
-                       .replace("\r", "\\r")
-                       .replace("\t", "\\t") + "\"";
-    }
 }
